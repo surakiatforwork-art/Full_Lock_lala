@@ -121,7 +121,7 @@ public class MainActivity extends Activity {
         nav.addView(label("สิทธิ์เสริมอาจช่วยให้เปิดหน้าจากเบื้องหลังได้ ขึ้นอยู่กับ Android และมือถือ",12,muted,false));
         item(nav,"การใช้แบตเตอรี่","เปิดตั้งค่า",()->startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName()))));
         space(nav,16);line(nav);space(nav,16);nav.addView(label("ทดสอบตัวกรอง",16,ink,true));item(nav,"แจ้งเตือนตัวอย่าง","ทดสอบ",()->sample());item(nav,"ตรวจการทำงาน","ตรวจสอบ",()->diagnostics());
-        space(nav,22);nav.addView(label("Full Lock 0.1.1 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
+        space(nav,22);nav.addView(label("Full Lock 0.1.2 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
     }
     private void sample() {
         new AlertDialog.Builder(this).setTitle("เลือกแจ้งเตือนตัวอย่าง").setItems(new String[]{"ไม่มีทิป · ฿156.00","มีทิป · ฿276.00 + ฿10.00","มีทิป · ฿129.00 + ฿18.00"},(dialog,index)->{
@@ -136,14 +136,22 @@ public class MainActivity extends Activity {
     }
     private void diagnostics() {
         long last=p().getLong("lastReceived",0);
-        String report="Full Lock 0.1.1\nเครื่อง: "+Build.MANUFACTURER+" "+Build.MODEL+"\nAndroid "+Build.VERSION.RELEASE+" ("+Build.VERSION.SDK_INT+")\nเปิดทำงาน: "+p().getBoolean("enabled",false)+"\nสิทธิ์อ่านแจ้งเตือน: "+access()+"\nตัวอ่านเชื่อมต่อ: "+JobListener.connected+"\nแจ้งเตือนของแอป: "+getSystemService(NotificationManager.class).areNotificationsEnabled()+"\nแสดงเหนือแอปอื่น: "+Settings.canDrawOverlays(this)+"\nได้รับจาก Lalamove ล่าสุด: "+(last==0?"ยังไม่เคย":java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(last)));
+        String report="Full Lock 0.1.2\nเครื่อง: "+Build.MANUFACTURER+" "+Build.MODEL+"\nAndroid "+Build.VERSION.RELEASE+" ("+Build.VERSION.SDK_INT+")\nเปิดทำงาน: "+p().getBoolean("enabled",false)+"\nสิทธิ์อ่านแจ้งเตือน: "+access()+"\nตัวอ่านเชื่อมต่อ: "+JobListener.connected+"\nแจ้งเตือนของแอป: "+getSystemService(NotificationManager.class).areNotificationsEnabled()+"\nแสดงเหนือแอปอื่น: "+Settings.canDrawOverlays(this)+"\nได้รับจาก Lalamove ล่าสุด: "+(last==0?"ยังไม่เคย":java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(last)));
         try {JSONArray entries=new JSONArray(p().getString("history","[]"));if(entries.length()>0)report+="\nผลล่าสุด: "+entries.getJSONObject(0).getString("result");}catch(JSONException ignored){}
         final String details=report;
         new AlertDialog.Builder(this).setTitle("ตรวจการทำงาน").setMessage(details).setPositiveButton("คัดลอกข้อมูล",(d,w)->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Full Lock diagnostics",details))).setNeutralButton("เชื่อมต่อตัวอ่านอีกครั้ง",(d,w)->{reconnect();Toast.makeText(this,"ส่งคำขอแล้ว ตรวจสถานะอีกครั้ง",Toast.LENGTH_LONG).show();}).setNegativeButton("ปิด",null).show();
     }
     private void historyBody() {
         try{JSONArray entries=new JSONArray(p().getString("history","[]"));if(entries.length()==0){LinearLayout c=card(null,"ยังไม่มีแจ้งเตือน");c.addView(label("เปิดสิทธิ์อ่านแจ้งเตือนและกดเริ่มทำงาน\nเมื่อมีงานเข้า ผลการตรวจจะแสดงที่นี่",14,muted,false));}
-            for(int i=0;i<entries.length();i++){JSONObject e=entries.getJSONObject(i);LinearLayout c=card(java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(new java.util.Date(e.getLong("time"))),e.getString("title"));c.addView(label(e.getString("text"),14,ink,false));space(c,10);c.addView(label(e.getString("result"),12,orange,true));}
+            for(int i=0;i<entries.length();i++){
+                JSONObject e=entries.getJSONObject(i);LinearLayout c=card(java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT,java.text.DateFormat.MEDIUM).format(new java.util.Date(e.getLong("time"))),e.getString("title"));
+                c.addView(label(e.getString("text"),14,ink,false));space(c,12);
+                boolean known=e.has("worked"), worked=e.optBoolean("worked",false);
+                int color=known?(worked?0xFF237A46:0xFFB44426):muted;
+                TextView badge=label(known?(worked?"✓  ทำงาน · ส่งคำสั่งเปิดแล้ว":"−  ไม่ทำงาน · ไม่ส่งคำสั่งเปิด"):"ประวัติรุ่นก่อน · ดูผลด้านล่าง",14,color,true);
+                pad(badge,10,7,10,7);badge.setBackground(bg(known?(worked?0xFFEAF6EE:0xFFFFF0E9):0xFFF1F1F3,5));c.addView(badge);space(c,9);
+                c.addView(label(e.getString("result"),13,ink,false));
+            }
             if(entries.length()>0){LinearLayout c=card(null,null);item(c,"ล้างประวัติ","",()->new AlertDialog.Builder(this).setMessage("ล้างประวัติแจ้งเตือนทั้งหมด?").setPositiveButton("ล้าง",(d,w)->{p().edit().remove("history").apply();render();}).setNegativeButton("ยกเลิก",null).show());}
         }catch(JSONException ignored){}
     }

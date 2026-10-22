@@ -17,7 +17,6 @@ public class JobListener extends NotificationListenerService {
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
         if (!DRIVER.equals(sbn.getPackageName())) return;
         Store.prefs(this).edit().putLong("lastReceived",System.currentTimeMillis()).apply();
-        if (!Store.prefs(this).getBoolean("enabled",false)) return;
         Notification n = sbn.getNotification();
         if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return;
         String title = String.valueOf(n.extras.getCharSequence(Notification.EXTRA_TITLE,""));
@@ -28,19 +27,21 @@ public class JobListener extends NotificationListenerService {
         if (fingerprint.equals(seen.get(sbn.getKey()))) return;
         seen.put(sbn.getKey(),fingerprint);
         if (seen.size()>200) seen.remove(seen.keySet().iterator().next());
+        if (!Store.prefs(this).getBoolean("enabled",false)) { Store.log(this,title,text,false,"ผู้ใช้ปิดการทำงานอยู่"); return; }
         JobParser.Job job = JobParser.parse(title,text);
         if (job == null && !text.equals(regular)) {
             job=JobParser.parse(title,regular);
             if(job!=null) text=regular;
         }
-        if (job == null) { Store.log(this,title,text,"ยังไม่รองรับรูปแบบนี้ · ไม่เปิดงาน"); return; }
+        if (job == null) { Store.log(this,title,text,false,"อ่านข้อมูลงานไม่ได้: ไม่พบเส้นทาง ประเภทงาน หรือราคาในรูปแบบที่รองรับ"); return; }
         String rejection = Store.rejection(this,job);
-        if (rejection != null) { Store.log(this,title,text,rejection); return; }
-        if (n.contentIntent == null) { Store.log(this,title,text,"ตรงเงื่อนไข แต่ไม่มีคำสั่งเปิดงาน"); return; }
+        if (rejection != null) { Store.log(this,title,text,false,rejection); return; }
+        if (n.contentIntent == null) { Store.log(this,title,text,false,"ตรงเงื่อนไข แต่แจ้งเตือนไม่มีคำสั่งเปิดหน้างาน"); return; }
         long now = SystemClock.elapsedRealtime();
         int cooldown = Store.prefs(this).getInt("cooldown",15);
         if (lastAttempt != 0 && now-lastAttempt < cooldown*1000L) {
-            Store.log(this,title,text,"ตรงเงื่อนไข · พักการเปิดงานซ้อน"); return;
+            long remaining=(cooldown*1000L-(now-lastAttempt)+999)/1000;
+            Store.log(this,title,text,false,"ตรงเงื่อนไข แต่พักการเปิดงานซ้อนอยู่ เหลือประมาณ "+remaining+" วินาที (ตั้งไว้ "+cooldown+" วินาที)"); return;
         }
         lastAttempt = now;
         try {
@@ -49,10 +50,10 @@ public class JobListener extends NotificationListenerService {
                 opts.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
                 n.contentIntent.send(this,0,null,null,null,null,opts.toBundle());
             } else n.contentIntent.send();
-            Store.log(this,title,text,"ส่งคำสั่งเปิดแล้ว · ยังไม่ยืนยันว่าหน้างานเปิด");
+            Store.log(this,title,text,true,"ตรงเงื่อนไขทั้งหมด · ส่งคำสั่งเปิดแล้ว\nยังไม่ยืนยันว่าหน้างานเปิดสำเร็จ ผู้ใช้ปัดรับงานเอง");
             offerManual(n.contentIntent,title);
         } catch (PendingIntent.CanceledException | SecurityException e) {
-            Store.log(this,title,text,"เปิดไม่ได้ · " + e.getClass().getSimpleName());
+            Store.log(this,title,text,false,"ตรงเงื่อนไข แต่เปิดไม่ได้: " + (e instanceof PendingIntent.CanceledException?"คำสั่งในแจ้งเตือนถูกยกเลิกหรือหมดอายุ":"ระบบไม่อนุญาตให้เรียกคำสั่งเปิด")+" ("+e.getClass().getSimpleName()+")");
             offerManual(n.contentIntent,title);
         }
     }
