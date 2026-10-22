@@ -81,7 +81,7 @@ public class MainActivity extends Activity {
         LinearLayout r=row();pad(r,0,13,0,13);r.addView(label(title,14,ink,false),new LinearLayout.LayoutParams(0,-2,1));TextView val=label(value+"  ›",14,orange,false);val.setGravity(Gravity.END);val.setMaxWidth(dp(185));r.addView(val);r.setOnClickListener(v->click.run());c.addView(r);
     }
     private void settingsBody() {
-        LinearLayout c=card(null,"การอ่านงานและปุ่มลอย");toggle(c,"เปิดปุ่มลอย FAB","ใช้ได้แม้ปิดเปิดงานอัตโนมัติ","floatingEnabled",true);
+        LinearLayout c=card(null,"การอ่านงาน");
         item(c,"สิทธิ์อ่านแจ้งเตือน",access()?"อนุญาตแล้ว":"ยังไม่อนุญาต",()->open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
         c.addView(label("อ่านและกรองเฉพาะแจ้งเตือนงานตลอดเวลา ไม่เก็บประกาศหรือ GPS",12,muted,false));
         c=card("01  /  ราคางาน","฿  กำหนดช่วงราคา");toggle(c,"กรองราคางาน","เปิดเฉพาะงานในช่วงราคาที่กำหนด","price",true);line(c);
@@ -130,7 +130,7 @@ public class MainActivity extends Activity {
         nav.addView(label("อนุญาตเข้าถึงข้อมูลการใช้งานแอป เพื่อซ่อน FAB เมื่อ Lalamove Driver อยู่เบื้องหน้า Full Lock ซ่อนอัตโนมัติอยู่แล้ว",12,muted,false));
         item(nav,"การใช้แบตเตอรี่","เปิดตั้งค่า",()->startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName()))));
         space(nav,16);line(nav);space(nav,16);nav.addView(label("ทดสอบตัวกรอง",16,ink,true));item(nav,"แจ้งเตือนตัวอย่าง","ทดสอบ",()->sample());item(nav,"ตรวจการทำงาน","ตรวจสอบ",()->diagnostics());
-        space(nav,22);nav.addView(label("Full Lock 0.1.6 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
+        space(nav,22);nav.addView(label("Full Lock 0.1.7 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
     }
     private void sample() {
         new AlertDialog.Builder(this).setTitle("เลือกแจ้งเตือนตัวอย่าง").setItems(new String[]{"ไม่มีทิป · ฿156.00","มีทิป · ฿276.00 + ฿10.00","มีทิป · ฿129.00 + ฿18.00"},(dialog,index)->{
@@ -151,7 +151,7 @@ public class MainActivity extends Activity {
     private void offerUsagePermission(){if(!ForegroundWatcher.allowed(this)&&!p().getBoolean("usagePromptShown",false)){p().edit().putBoolean("usagePromptShown",true).apply();new AlertDialog.Builder(this).setTitle("ซ่อน FAB ขณะใช้ Lalamove").setMessage("อนุญาตเข้าถึงข้อมูลการใช้งานแอป เพื่อดูว่า Lalamove Driver อยู่เบื้องหน้าหรือไม่ แล้วซ่อน FAB ให้อัตโนมัติ").setPositiveButton("เปิดการตั้งค่า",(d,w)->open(Settings.ACTION_USAGE_ACCESS_SETTINGS)).setNegativeButton("ภายหลัง",null).show();}}
     private void diagnostics() {
         long last=p().getLong("lastReceived",0);
-        String report="Full Lock 0.1.6\nเครื่อง: "+Build.MANUFACTURER+" "+Build.MODEL+"\nAndroid "+Build.VERSION.RELEASE+" ("+Build.VERSION.SDK_INT+")\nเปิดงานอัตโนมัติ: "+p().getBoolean("enabled",false)+"\nสิทธิ์อ่านแจ้งเตือน: "+access()+"\nตัวอ่านเชื่อมต่อ: "+JobListener.connected+"\nแจ้งเตือนของแอป: "+getSystemService(NotificationManager.class).areNotificationsEnabled()+"\nแสดงเหนือแอปอื่น: "+Settings.canDrawOverlays(this)+"\nสิทธิ์ข้อมูลการใช้งาน: "+ForegroundWatcher.allowed(this)+"\nปุ่มลอยแสดงอยู่: "+JobListener.floatingVisible()+"\nเปิด FAB: "+p().getBoolean("floatingEnabled",true)+"\nได้รับงานจาก Lalamove ล่าสุด: "+(last==0?"ยังไม่เคย":java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(last)));
+        String report="Full Lock 0.1.7\nเครื่อง: "+Build.MANUFACTURER+" "+Build.MODEL+"\nAndroid "+Build.VERSION.RELEASE+" ("+Build.VERSION.SDK_INT+")\nเปิดงานอัตโนมัติ: "+p().getBoolean("enabled",false)+"\nสิทธิ์อ่านแจ้งเตือน: "+access()+"\nตัวอ่านเชื่อมต่อ: "+JobListener.connected+"\nแจ้งเตือนของแอป: "+getSystemService(NotificationManager.class).areNotificationsEnabled()+"\nแสดงเหนือแอปอื่น: "+Settings.canDrawOverlays(this)+"\nสิทธิ์ข้อมูลการใช้งาน: "+ForegroundWatcher.allowed(this)+"\nปุ่มลอยแสดงอยู่: "+JobListener.floatingVisible()+"\nเปิด FAB: "+p().getBoolean("floatingEnabled",true)+"\nได้รับงานจาก Lalamove ล่าสุด: "+(last==0?"ยังไม่เคย":java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(last)));
         try {JSONArray entries=new JSONArray(p().getString("history","[]"));if(entries.length()>0)report+="\nผลล่าสุด: "+entries.getJSONObject(0).getString("result");}catch(JSONException ignored){}
         final String details=report;
         new AlertDialog.Builder(this).setTitle("ตรวจการทำงาน").setMessage(details).setPositiveButton("คัดลอกข้อมูล",(d,w)->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Full Lock diagnostics",details))).setNeutralButton("เชื่อมต่อตัวอ่านอีกครั้ง",(d,w)->{reconnect();Toast.makeText(this,"ส่งคำขอแล้ว ตรวจสถานะอีกครั้ง",Toast.LENGTH_LONG).show();}).setNegativeButton("ปิด",null).show();
