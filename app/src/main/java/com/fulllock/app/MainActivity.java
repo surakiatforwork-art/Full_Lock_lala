@@ -31,7 +31,7 @@ public class MainActivity extends Activity {
         p().registerOnSharedPreferenceChangeListener(updates);
         render();
     }
-    @Override protected void onResume() { super.onResume(); render(); }
+    @Override protected void onResume() { super.onResume(); JobListener.refreshFloating();render(); }
     @Override protected void onDestroy() { p().unregisterOnSharedPreferenceChangeListener(updates); super.onDestroy(); }
     private GradientDrawable bg(int color,int radius) { GradientDrawable d=new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(radius)); return d; }
     private TextView label(String s,int size,int color,boolean bold) {
@@ -60,7 +60,7 @@ public class MainActivity extends Activity {
         LinearLayout footer=column();footer.setBackgroundColor(Color.WHITE);pad(footer,18,12,18,14);View border=new View(this);border.setBackgroundColor(orange);footer.addView(border,new LinearLayout.LayoutParams(-1,dp(2)));space(footer,10);
         footer.addView(label("คุณเป็นคนปัดรับงานเอง",15,ink,true));space(footer,2);footer.addView(label("แอปช่วยกรองและเปิดงานที่ตรงเงื่อนไข",12,muted,false));space(footer,10);
         TextView start=label(p().getBoolean("enabled",false)?"■     หยุดการทำงาน":"→     เริ่มทำงาน",19,Color.WHITE,true);start.setGravity(Gravity.CENTER);start.setBackground(bg(orange,10));footer.addView(start,new LinearLayout.LayoutParams(-1,dp(54)));
-        start.setOnClickListener(v->{boolean enabled=p().getBoolean("enabled",false);if(!enabled&&!access()){new AlertDialog.Builder(this).setTitle("อนุญาตการอ่านแจ้งเตือนก่อน").setMessage("เลือก Full Lock แล้วเปิดสิทธิ์การเข้าถึงการแจ้งเตือน").setPositiveButton("เปิดการตั้งค่า",(d,w)->open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)).setNegativeButton("ยกเลิก",null).show();return;}p().edit().putBoolean("enabled",!enabled).apply();if(!enabled)reconnect();render();});
+        start.setOnClickListener(v->{boolean enabled=p().getBoolean("enabled",false);if(!enabled&&!access()){new AlertDialog.Builder(this).setTitle("อนุญาตการอ่านแจ้งเตือนก่อน").setMessage("เลือก Full Lock แล้วเปิดสิทธิ์การเข้าถึงการแจ้งเตือน").setPositiveButton("เปิดการตั้งค่า",(d,w)->open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)).setNegativeButton("ยกเลิก",null).show();return;}p().edit().putBoolean("enabled",!enabled).apply();if(!enabled)reconnect();render();if(!enabled)offerFloatingPermission();});
         root.addView(footer);setContentView(frame);
     }
     private void chip(LinearLayout parent,String text) { TextView t=label(text,12,ink,false);pad(t,10,6,10,6);t.setBackground(bg(0xFFFFF3EE,5));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,-2);lp.rightMargin=dp(8);parent.addView(t,lp); }
@@ -117,11 +117,11 @@ public class MainActivity extends Activity {
         item(nav,"อ่านแจ้งเตือน",access()?"อนุญาตแล้ว":"ยังไม่อนุญาต",()->open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
         boolean canNotify=getSystemService(NotificationManager.class).areNotificationsEnabled();
         item(nav,"แจ้งเตือนงานที่พบ",canNotify?"อนุญาตแล้ว":"ยังไม่อนุญาต",()->{if(Build.VERSION.SDK_INT>=33&&!canNotify)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},1);else startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));});
-        item(nav,"แสดงเหนือแอปอื่น",Settings.canDrawOverlays(this)?"อนุญาตแล้ว":"ตัวเลือกเสริม",()->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName()))));
-        nav.addView(label("สิทธิ์เสริมอาจช่วยให้เปิดหน้าจากเบื้องหลังได้ ขึ้นอยู่กับ Android และมือถือ",12,muted,false));
+        item(nav,"ปุ่มลอยนอกแอป",Settings.canDrawOverlays(this)?"อนุญาตแล้ว":"อนุญาตสิทธิ์",()->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName()))));
+        nav.addView(label("อนุญาตแสดงเหนือแอปอื่นเพื่อใช้ปุ่มลอย ดูงานล่าสุด แตะเปิดงาน หรือลากย้ายตำแหน่ง ปุ่มแสดงเมื่อเริ่มทำงานเท่านั้น",12,muted,false));
         item(nav,"การใช้แบตเตอรี่","เปิดตั้งค่า",()->startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName()))));
         space(nav,16);line(nav);space(nav,16);nav.addView(label("ทดสอบตัวกรอง",16,ink,true));item(nav,"แจ้งเตือนตัวอย่าง","ทดสอบ",()->sample());item(nav,"ตรวจการทำงาน","ตรวจสอบ",()->diagnostics());
-        space(nav,22);nav.addView(label("Full Lock 0.1.3 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
+        space(nav,22);nav.addView(label("Full Lock 0.1.4 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
     }
     private void sample() {
         new AlertDialog.Builder(this).setTitle("เลือกแจ้งเตือนตัวอย่าง").setItems(new String[]{"ไม่มีทิป · ฿156.00","มีทิป · ฿276.00 + ฿10.00","มีทิป · ฿129.00 + ฿18.00"},(dialog,index)->{
@@ -134,9 +134,13 @@ public class MainActivity extends Activity {
     private void reconnect() {
         if(access() && !JobListener.connected) android.service.notification.NotificationListenerService.requestRebind(new ComponentName(this,JobListener.class));
     }
+    private void offerFloatingPermission() {
+        JobListener.refreshFloating();
+        if(!Settings.canDrawOverlays(this))new AlertDialog.Builder(this).setTitle("เปิดใช้ปุ่มลอยนอกแอป").setMessage("อนุญาตแสดงเหนือแอปอื่น เพื่อแสดงแจ้งเตือนงานล่าสุดและแตะเปิดงานได้จากปุ่มลอย").setPositiveButton("อนุญาต",(d,w)->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName())))).setNegativeButton("ภายหลัง",null).show();
+    }
     private void diagnostics() {
         long last=p().getLong("lastReceived",0);
-        String report="Full Lock 0.1.3\nเครื่อง: "+Build.MANUFACTURER+" "+Build.MODEL+"\nAndroid "+Build.VERSION.RELEASE+" ("+Build.VERSION.SDK_INT+")\nเปิดทำงาน: "+p().getBoolean("enabled",false)+"\nสิทธิ์อ่านแจ้งเตือน: "+access()+"\nตัวอ่านเชื่อมต่อ: "+JobListener.connected+"\nแจ้งเตือนของแอป: "+getSystemService(NotificationManager.class).areNotificationsEnabled()+"\nแสดงเหนือแอปอื่น: "+Settings.canDrawOverlays(this)+"\nได้รับจาก Lalamove ล่าสุด: "+(last==0?"ยังไม่เคย":java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(last)));
+        String report="Full Lock 0.1.4\nเครื่อง: "+Build.MANUFACTURER+" "+Build.MODEL+"\nAndroid "+Build.VERSION.RELEASE+" ("+Build.VERSION.SDK_INT+")\nเปิดทำงาน: "+p().getBoolean("enabled",false)+"\nสิทธิ์อ่านแจ้งเตือน: "+access()+"\nตัวอ่านเชื่อมต่อ: "+JobListener.connected+"\nแจ้งเตือนของแอป: "+getSystemService(NotificationManager.class).areNotificationsEnabled()+"\nแสดงเหนือแอปอื่น: "+Settings.canDrawOverlays(this)+"\nปุ่มลอยแสดงอยู่: "+JobListener.floatingVisible()+"\nได้รับจาก Lalamove ล่าสุด: "+(last==0?"ยังไม่เคย":java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(last)));
         try {JSONArray entries=new JSONArray(p().getString("history","[]"));if(entries.length()>0)report+="\nผลล่าสุด: "+entries.getJSONObject(0).getString("result");}catch(JSONException ignored){}
         final String details=report;
         new AlertDialog.Builder(this).setTitle("ตรวจการทำงาน").setMessage(details).setPositiveButton("คัดลอกข้อมูล",(d,w)->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Full Lock diagnostics",details))).setNeutralButton("เชื่อมต่อตัวอ่านอีกครั้ง",(d,w)->{reconnect();Toast.makeText(this,"ส่งคำขอแล้ว ตรวจสถานะอีกครั้ง",Toast.LENGTH_LONG).show();}).setNegativeButton("ปิด",null).show();
