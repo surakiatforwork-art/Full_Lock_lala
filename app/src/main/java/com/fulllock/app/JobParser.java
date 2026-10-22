@@ -24,11 +24,18 @@ public final class JobParser {
         if (now == later) return null;
         List<BigDecimal> amounts = new ArrayList<>();
         Matcher money = MONEY.matcher(text);
-        while (money.find()) amounts.add(new BigDecimal(money.group(1).replace(",", "")));
-        // Multi-amount / tip semantics need verified real samples. Do not guess.
-        if (amounts.size() != 1 || text.contains("ทิป")) return null;
+        int firstEnd = -1, secondStart = -1;
+        while (money.find()) {
+            if (amounts.isEmpty()) firstEnd = money.end();
+            else if (amounts.size() == 1) secondStart = money.start();
+            amounts.add(new BigDecimal(money.group(1).replace(",", "")));
+        }
+        if (amounts.isEmpty() || amounts.size() > 2) return null;
+        // User-confirmed format: base fare + tip. Fees apply to the base only.
+        if (amounts.size() == 2 && !text.substring(firstEnd, secondStart).trim().equals("+")) return null;
+        if (amounts.size() == 1 && text.contains("ทิป")) return null;
         return new Job(route.group(1).trim(), route.group(2).trim(), route.group(3).trim(),
-                now ? "ขนส่งทันที" : "งานล่วงหน้า", amounts.get(0), BigDecimal.ZERO, title, text);
+                now ? "ขนส่งทันที" : "งานล่วงหน้า", amounts.get(0), amounts.size()==2 ? amounts.get(1) : BigDecimal.ZERO, title, text);
     }
     public static boolean areaMatches(String area, String list) {
         return Arrays.stream(list.split(",")).map(String::trim).filter(s -> !s.isEmpty()).anyMatch(area::contains);

@@ -60,7 +60,7 @@ public class MainActivity extends Activity {
         LinearLayout footer=column();footer.setBackgroundColor(Color.WHITE);pad(footer,18,12,18,14);View border=new View(this);border.setBackgroundColor(orange);footer.addView(border,new LinearLayout.LayoutParams(-1,dp(2)));space(footer,10);
         footer.addView(label("คุณเป็นคนปัดรับงานเอง",15,ink,true));space(footer,2);footer.addView(label("แอปช่วยกรองและเปิดงานที่ตรงเงื่อนไข",12,muted,false));space(footer,10);
         TextView start=label(p().getBoolean("enabled",false)?"■     หยุดการทำงาน":"→     เริ่มทำงาน",19,Color.WHITE,true);start.setGravity(Gravity.CENTER);start.setBackground(bg(orange,10));footer.addView(start,new LinearLayout.LayoutParams(-1,dp(54)));
-        start.setOnClickListener(v->{boolean enabled=p().getBoolean("enabled",false);if(!enabled&&!access()){new AlertDialog.Builder(this).setTitle("อนุญาตการอ่านแจ้งเตือนก่อน").setMessage("เลือก Full Lock แล้วเปิดสิทธิ์การเข้าถึงการแจ้งเตือน").setPositiveButton("เปิดการตั้งค่า",(d,w)->open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)).setNegativeButton("ยกเลิก",null).show();return;}p().edit().putBoolean("enabled",!enabled).apply();render();});
+        start.setOnClickListener(v->{boolean enabled=p().getBoolean("enabled",false);if(!enabled&&!access()){new AlertDialog.Builder(this).setTitle("อนุญาตการอ่านแจ้งเตือนก่อน").setMessage("เลือก Full Lock แล้วเปิดสิทธิ์การเข้าถึงการแจ้งเตือน").setPositiveButton("เปิดการตั้งค่า",(d,w)->open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)).setNegativeButton("ยกเลิก",null).show();return;}p().edit().putBoolean("enabled",!enabled).apply();if(!enabled)reconnect();render();});
         root.addView(footer);setContentView(frame);
     }
     private void chip(LinearLayout parent,String text) { TextView t=label(text,12,ink,false);pad(t,10,6,10,6);t.setBackground(bg(0xFFFFF3EE,5));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,-2);lp.rightMargin=dp(8);parent.addView(t,lp); }
@@ -89,7 +89,7 @@ public class MainActivity extends Activity {
         c=card("03  /  ตัวเลือกงาน","▣  รูปแบบงาน");String[] types={"ทั้งหมด","ขนส่งทันที","งานล่วงหน้า"};item(c,"ประเภทงาน",types[p().getInt("type",0)],()->choose("ประเภทงาน","type",types));line(c);
         toggle(c,"บล็อกงานเหมา","อ้างอิงรายการราคาในสคริปต์เดิม","bulk",false);line(c);
         item(c,"พักการเปิดงานซ้อน",p().getInt("cooldown",15)+" วินาที",()->number("พักการเปิดงานซ้อน (วินาที)","cooldown",15,3,300));
-        c=card(null,null);c.addView(label("ⓘ  ไม่ต้องดึงแถบแจ้งเตือนลง",14,ink,true));space(c,5);c.addView(label("เก็บแจ้งเตือนเดิมไว้ และเปิดผ่านคำสั่งของแจ้งเตือนโดยตรง หากระบบไม่เปิด ให้แตะการแจ้งเตือนจาก Full Lock",12,muted,false));space(c,6);c.addView(label("รุ่นทดสอบ: รองรับราคาเดียว ไม่มีทิป รูปแบบอื่นจะถูกบันทึกไว้โดยไม่เปิดงาน",12,orange,false));
+        c=card(null,null);c.addView(label("ⓘ  ไม่ต้องดึงแถบแจ้งเตือนลง",14,ink,true));space(c,5);c.addView(label("เก็บแจ้งเตือนเดิมไว้ และเปิดผ่านคำสั่งของแจ้งเตือนโดยตรง หากระบบไม่เปิด ให้แตะการแจ้งเตือนจาก Full Lock",12,muted,false));space(c,6);c.addView(label("รองรับราคา + ทิป เช่น ฿276.00 + ฿10.00 โดยหักค่าธรรมเนียมเฉพาะราคางาน",12,orange,false));
     }
     private String areaValue(String key) { String s=p().getString(key,"");return s.isBlank()?"ยังไม่กำหนด":s; }
     private void priceBox(LinearLayout parent,String title,String key,String def) {
@@ -120,10 +120,27 @@ public class MainActivity extends Activity {
         item(nav,"แสดงเหนือแอปอื่น",Settings.canDrawOverlays(this)?"อนุญาตแล้ว":"ตัวเลือกเสริม",()->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName()))));
         nav.addView(label("สิทธิ์เสริมอาจช่วยให้เปิดหน้าจากเบื้องหลังได้ ขึ้นอยู่กับ Android และมือถือ",12,muted,false));
         item(nav,"การใช้แบตเตอรี่","เปิดตั้งค่า",()->startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName()))));
-        space(nav,16);line(nav);space(nav,16);nav.addView(label("ทดสอบตัวกรอง",16,ink,true));item(nav,"แจ้งเตือนตัวอย่าง","ทดสอบ",()->sample());
-        space(nav,22);nav.addView(label("Full Lock 0.1.0 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
+        space(nav,16);line(nav);space(nav,16);nav.addView(label("ทดสอบตัวกรอง",16,ink,true));item(nav,"แจ้งเตือนตัวอย่าง","ทดสอบ",()->sample());item(nav,"ตรวจการทำงาน","ตรวจสอบ",()->diagnostics());
+        space(nav,22);nav.addView(label("Full Lock 0.1.1 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
     }
-    private void sample() { JobParser.Job j=JobParser.parse("[ขนส่งสินค้า] เสาธงหิน > วังใหม่","ขนส่งทันที ฿156.00 รับงานขนส่ง!");String r=Store.rejection(this,j);new AlertDialog.Builder(this).setTitle("ทดสอบตัวกรอง · ฿156.00").setMessage("เสาธงหิน → วังใหม่\nขนส่งทันที\n\n"+(r==null?"ผ่านเงื่อนไข":r)+"\n\nนี่เป็นข้อมูลตัวอย่าง ไม่เปิด Lalamove").setPositiveButton("ตกลง",null).show(); }
+    private void sample() {
+        new AlertDialog.Builder(this).setTitle("เลือกแจ้งเตือนตัวอย่าง").setItems(new String[]{"ไม่มีทิป · ฿156.00","มีทิป · ฿276.00 + ฿10.00","มีทิป · ฿129.00 + ฿18.00"},(dialog,index)->{
+            String[] titles={"[ขนส่งสินค้า] เสาธงหิน > วังใหม่","[ขนส่งสินค้า] บางคูรัด > หัวหมาก","[ขนส่งสินค้า] คลองพระอุดม > ปลายทางตัวอย่าง"};
+            String[] amounts={"฿156.00","฿276.00 + ฿10.00","฿129.00 + ฿18.00"};
+            JobParser.Job j=JobParser.parse(titles[index],"ขนส่งทันที "+amounts[index]+" รับงานขนส่ง!");String r=Store.rejection(this,j);
+            new AlertDialog.Builder(this).setTitle("ผลทดสอบตัวกรอง").setMessage(j.origin()+" → "+j.destination()+"\nราคางาน ฿"+j.fare()+"\nทิป ฿"+j.tip()+"\nราคาตามสูตร ฿"+j.price(p().getInt("formula",0),p().getInt("fee",20))+"\n\n"+(r==null?"ผ่านเงื่อนไข":r)+"\n\nข้อมูลตัวอย่าง ไม่เปิด Lalamove").setPositiveButton("ตกลง",null).show();
+        }).show();
+    }
+    private void reconnect() {
+        if(access() && !JobListener.connected) android.service.notification.NotificationListenerService.requestRebind(new ComponentName(this,JobListener.class));
+    }
+    private void diagnostics() {
+        long last=p().getLong("lastReceived",0);
+        String report="Full Lock 0.1.1\nเครื่อง: "+Build.MANUFACTURER+" "+Build.MODEL+"\nAndroid "+Build.VERSION.RELEASE+" ("+Build.VERSION.SDK_INT+")\nเปิดทำงาน: "+p().getBoolean("enabled",false)+"\nสิทธิ์อ่านแจ้งเตือน: "+access()+"\nตัวอ่านเชื่อมต่อ: "+JobListener.connected+"\nแจ้งเตือนของแอป: "+getSystemService(NotificationManager.class).areNotificationsEnabled()+"\nแสดงเหนือแอปอื่น: "+Settings.canDrawOverlays(this)+"\nได้รับจาก Lalamove ล่าสุด: "+(last==0?"ยังไม่เคย":java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(last)));
+        try {JSONArray entries=new JSONArray(p().getString("history","[]"));if(entries.length()>0)report+="\nผลล่าสุด: "+entries.getJSONObject(0).getString("result");}catch(JSONException ignored){}
+        final String details=report;
+        new AlertDialog.Builder(this).setTitle("ตรวจการทำงาน").setMessage(details).setPositiveButton("คัดลอกข้อมูล",(d,w)->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Full Lock diagnostics",details))).setNeutralButton("เชื่อมต่อตัวอ่านอีกครั้ง",(d,w)->{reconnect();Toast.makeText(this,"ส่งคำขอแล้ว ตรวจสถานะอีกครั้ง",Toast.LENGTH_LONG).show();}).setNegativeButton("ปิด",null).show();
+    }
     private void historyBody() {
         try{JSONArray entries=new JSONArray(p().getString("history","[]"));if(entries.length()==0){LinearLayout c=card(null,"ยังไม่มีแจ้งเตือน");c.addView(label("เปิดสิทธิ์อ่านแจ้งเตือนและกดเริ่มทำงาน\nเมื่อมีงานเข้า ผลการตรวจจะแสดงที่นี่",14,muted,false));}
             for(int i=0;i<entries.length();i++){JSONObject e=entries.getJSONObject(i);LinearLayout c=card(java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(new java.util.Date(e.getLong("time"))),e.getString("title"));c.addView(label(e.getString("text"),14,ink,false));space(c,10);c.addView(label(e.getString("result"),12,orange,true));}

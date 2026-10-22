@@ -7,23 +7,32 @@ import android.service.notification.*;
 import java.util.*;
 
 public class JobListener extends NotificationListenerService {
+    static volatile boolean connected;
     static final String DRIVER = "com.lalamove.global.driver.sea";
     private final Map<String,String> seen = new LinkedHashMap<>();
     private long lastAttempt;
-    @Override public void onListenerConnected() { Store.prefs(this).edit().putBoolean("connected",true).apply(); }
-    @Override public void onListenerDisconnected() { Store.prefs(this).edit().putBoolean("connected",false).apply(); }
+    @Override public void onListenerConnected() { connected=true; }
+    @Override public void onListenerDisconnected() { connected=false; }
+    @Override public void onDestroy() { connected=false; super.onDestroy(); }
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
-        if (!DRIVER.equals(sbn.getPackageName()) || !Store.prefs(this).getBoolean("enabled",false)) return;
+        if (!DRIVER.equals(sbn.getPackageName())) return;
+        Store.prefs(this).edit().putLong("lastReceived",System.currentTimeMillis()).apply();
+        if (!Store.prefs(this).getBoolean("enabled",false)) return;
         Notification n = sbn.getNotification();
         if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return;
         String title = String.valueOf(n.extras.getCharSequence(Notification.EXTRA_TITLE,""));
-        String text = String.valueOf(n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT,
-                n.extras.getCharSequence(Notification.EXTRA_TEXT,"")));
+        String regular = String.valueOf(n.extras.getCharSequence(Notification.EXTRA_TEXT,""));
+        CharSequence big = n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
+        String text = big == null || big.toString().isBlank() ? regular : big.toString();
         String fingerprint = title + "\n" + text;
         if (fingerprint.equals(seen.get(sbn.getKey()))) return;
         seen.put(sbn.getKey(),fingerprint);
         if (seen.size()>200) seen.remove(seen.keySet().iterator().next());
         JobParser.Job job = JobParser.parse(title,text);
+        if (job == null && !text.equals(regular)) {
+            job=JobParser.parse(title,regular);
+            if(job!=null) text=regular;
+        }
         if (job == null) { Store.log(this,title,text,"ยังไม่รองรับรูปแบบนี้ · ไม่เปิดงาน"); return; }
         String rejection = Store.rejection(this,job);
         if (rejection != null) { Store.log(this,title,text,rejection); return; }
