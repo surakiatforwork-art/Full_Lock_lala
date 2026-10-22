@@ -12,19 +12,31 @@ final class Store {
         if (p.getBoolean("price", true)) {
             BigDecimal value = job.price(p.getInt("formula", 0), p.getInt("fee", 20));
             String min=p.getString("min","100"), max=p.getString("max","2000");
-            if (value.compareTo(new BigDecimal(min)) < 0) reasons.add("ไม่ตรงเงื่อนไข: ราคาตามสูตร "+money(value)+" บาท ต่ำกว่าขั้นต่ำ "+min+" บาท");
-            if (value.compareTo(new BigDecimal(max)) > 0) reasons.add("ไม่ตรงเงื่อนไข: ราคาตามสูตร "+money(value)+" บาท สูงกว่าขั้นสูง "+max+" บาท");
+            if (value.compareTo(new BigDecimal(min)) < 0) reasons.add("ราคาต่ำไป");
+            if (value.compareTo(new BigDecimal(max)) > 0) reasons.add("ราคาสูงไป");
         }
-        if (p.getBoolean("originOn", false) && !JobParser.areaMatches(job.origin(), p.getString("origins", ""))) reasons.add("ไม่ตรงเงื่อนไข: ต้นทาง “"+job.origin()+"” ไม่อยู่ในพื้นที่ที่ตั้งไว้: "+area(p.getString("origins","")));
-        if (p.getBoolean("destOn", false) && !JobParser.areaMatches(job.destination(), p.getString("destinations", ""))) reasons.add("ไม่ตรงเงื่อนไข: ปลายทาง “"+job.destination()+"” ไม่อยู่ในพื้นที่ที่ตั้งไว้: "+area(p.getString("destinations","")));
+        if (p.getBoolean("originOn", false) && !JobParser.areaMatches(job.origin(), p.getString("origins", ""))) reasons.add("ต้นทางไม่ตรง");
+        if (p.getBoolean("destOn", false) && !JobParser.areaMatches(job.destination(), p.getString("destinations", ""))) reasons.add("ปลายทางไม่ตรง");
         int type = p.getInt("type", 0);
-        if (type == 1 && !job.type().equals("ขนส่งทันที") || type == 2 && !job.type().equals("งานล่วงหน้า")) reasons.add("ไม่ตรงเงื่อนไข: เป็น"+job.type()+" แต่ตั้งไว้เฉพาะ"+(type==1?"ขนส่งทันที":"งานล่วงหน้า"));
+        if (type == 1 && !job.type().equals("ขนส่งทันที") || type == 2 && !job.type().equals("งานล่วงหน้า")) reasons.add("ประเภทงานไม่ตรง");
         if (p.getBoolean("bulk", false)) for (int amount : new int[]{475,600,650,900,735,1000,1150})
-            if (job.fare().compareTo(BigDecimal.valueOf(amount)) == 0) reasons.add("เปิดบล็อกงานเหมา: ราคางาน "+money(job.fare())+" บาท ตรงรายการที่บล็อกไว้");
-        return reasons.isEmpty()?null:String.join("\n",reasons);
+            if (job.fare().compareTo(BigDecimal.valueOf(amount)) == 0) reasons.add("คาดว่าเป็นงานเหมา");
+        return reasons.isEmpty()?null:String.join(" / ",reasons);
     }
-    private static String money(BigDecimal n) { return n.setScale(2,java.math.RoundingMode.HALF_UP).toPlainString(); }
-    private static String area(String s) { return s.isBlank()?"ยังไม่ได้กำหนดพื้นที่":s; }
+    // Render previous versions' filter reasons concisely without modifying saved history.
+    static String shortReason(String result) {
+        java.util.List<String> lines=new java.util.ArrayList<>();
+        for(String line:result.split("\n")) {
+            if(line.contains("ต่ำกว่าขั้นต่ำ") || line.equals("ราคาต่ำกว่าที่ตั้งไว้")) line="ราคาต่ำไป";
+            else if(line.contains("สูงกว่าขั้นสูง") || line.equals("ราคาสูงกว่าที่ตั้งไว้")) line="ราคาสูงไป";
+            else if(line.startsWith("ไม่ตรงเงื่อนไข: ต้นทาง") || line.equals("ต้นทางไม่ตรงเงื่อนไข")) line="ต้นทางไม่ตรง";
+            else if(line.startsWith("ไม่ตรงเงื่อนไข: ปลายทาง") || line.equals("ปลายทางไม่ตรงเงื่อนไข")) line="ปลายทางไม่ตรง";
+            else if(line.startsWith("เปิดบล็อกงานเหมา:") || line.equals("ราคาตรงรายการบล็อกงานเหมา")) line="คาดว่าเป็นงานเหมา";
+            else if(line.startsWith("ไม่ตรงเงื่อนไข: เป็น") || line.equals("ประเภทงานไม่ตรงเงื่อนไข")) line="ประเภทงานไม่ตรง";
+            lines.add(line);
+        }
+        return String.join(" / ",lines);
+    }
     static synchronized void log(Context c, String title, String text, boolean worked, String result) {
         try {
             JSONArray old = new JSONArray(prefs(c).getString("history", "[]")), next = new JSONArray();
