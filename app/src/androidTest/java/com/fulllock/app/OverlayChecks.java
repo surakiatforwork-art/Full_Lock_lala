@@ -36,7 +36,7 @@ public class OverlayChecks extends Instrumentation {
             service().onNotificationPosted(notification(6001,"[ขนส่งสินค้า] A > B","ขนส่งทันที ฿276.00 + ฿10.00 รับงานขนส่ง!",0,intent));
             FloatingJobView live=(FloatingJobView)field(service(),"floating");
             check(live.model.items.get(0).matches,"matched tick calculated with auto-open off");check(live.model.unread==1,"job counted with auto-open off");
-            try{check(new org.json.JSONArray(p.getString("history","[]")).getJSONObject(0).getString("result").contains("ปิดเปิดงานอัตโนมัติ"),"history explains auto-off");}catch(Exception e){throw new RuntimeException(e);}
+            try{check(new org.json.JSONArray(p.getString("history","[]")).getJSONObject(0).getString("result").contains("ยังไม่เปิดอัตโนมัติ"),"history explains auto-off");}catch(Exception e){throw new RuntimeException(e);}
             String history=p.getString("history","[]");long received=p.getLong("lastReceived",0);
             service().onNotificationPosted(notification(6002,"ประกาศ","รับโบนัส ฿500",0,null));
             service().onNotificationPosted(notification(6003,"GPS กำลังทำงาน","กำลังติดตามตำแหน่ง",Notification.FLAG_ONGOING_EVENT,null));
@@ -52,18 +52,19 @@ public class OverlayChecks extends Instrumentation {
             check(sends==0,"auto-off sends nothing");
             p.edit().putBoolean("enabled",true).apply();check(live.model.unread==3,"auto switch preserves unread");
             service().onNotificationPosted(notification(6008,"[ขนส่งสินค้า] E > F","ขนส่งทันที ฿190.00 รับงานขนส่ง!",0,intent));
+            service().onNotificationPosted(notification(6010,"[ขนส่งสินค้า] I > J","ขนส่งทันที ฿191.00 รับงานขนส่ง!",0,intent));
         });
         waitForIdleSync();Thread.sleep(400);
-        main(()->{check(sends==1,"auto-on sends matched job");Store.prefs(getTargetContext()).edit().putBoolean("enabled",false).apply();
+        main(()->{check(sends==2,"matching jobs open immediately without cooldown");Store.prefs(getTargetContext()).edit().putBoolean("enabled",false).apply();
             PendingIntent intent=PendingIntent.getBroadcast(getTargetContext(),6001,new Intent("com.fulllock.app.OPEN_PROBE").setPackage(getTargetContext().getPackageName()),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
             service().onNotificationPosted(notification(6009,"[ขนส่งสินค้า] G > H","ขนส่งทันที ฿195.00 รับงานขนส่ง!",0,intent));
         });waitForIdleSync();Thread.sleep(400);
-        main(()->{check(sends==1,"stopping auto prevents subsequent open");
+        main(()->{check(sends==2,"stopping auto prevents subsequent open");
             android.service.notification.StatusBarNotification target=null;
             for(var n:getTargetContext().getSystemService(NotificationManager.class).getActiveNotifications())if(n.getId()==41)target=n;
             check(target!=null,"manual fallback notification active");
             try{java.lang.reflect.Method method=JobListener.class.getDeclaredMethod("openFloatingJob",FloatingJobs.Item.class);method.setAccessible(true);method.invoke(service(),new FloatingJobs.Item(target.getKey(),target.getPostTime(),"manual","manual",null,true,true));}catch(Exception e){throw new RuntimeException(e);}
-        });waitForIdleSync();Thread.sleep(400);main(()->check(sends==2,"manual open works with auto-off"));
+        });waitForIdleSync();Thread.sleep(400);main(()->check(sends==3,"manual open works with auto-off"));
     }
     private void capture(String name)throws Exception {
         if(!preview)return;waitForIdleSync();Thread.sleep(450);
@@ -119,7 +120,7 @@ public class OverlayChecks extends Instrumentation {
                 Store.prefs(getTargetContext()).edit().putBoolean("enabled",false).apply();check(JobListener.floatingVisible(),"auto-off keeps FAB");
             });
             monitorChecks();
-            result.putString("stream","OverlayChecks: "+checks+" checks passed\n");
+            int uiCount=new UiChecks(this,preview).run(); result.putString("stream","OverlayChecks: "+checks+" checks passed\nUiChecks: "+uiCount+" checks passed\n");
         }catch(Throwable e){code=Activity.RESULT_CANCELED;result.putString("stream","OverlayChecks failed: "+e+"\n");}
         finally{main(()->{if(view!=null)view.hide();if(probe!=null)getTargetContext().unregisterReceiver(probe);getTargetContext().getSystemService(NotificationManager.class).cancel(41);MainActivity.foreground=false;if(saved!=null){var edit=Store.prefs(getTargetContext()).edit().clear();for(var entry:saved.entrySet()){Object v=entry.getValue();String k=entry.getKey();if(v instanceof String)edit.putString(k,(String)v);else if(v instanceof Boolean)edit.putBoolean(k,(Boolean)v);else if(v instanceof Integer)edit.putInt(k,(Integer)v);else if(v instanceof Long)edit.putLong(k,(Long)v);else if(v instanceof Float)edit.putFloat(k,(Float)v);}edit.apply();JobListener.refreshFloating();}});}
         finish(code,result);

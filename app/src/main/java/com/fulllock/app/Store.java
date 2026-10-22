@@ -27,6 +27,14 @@ final class Store {
     static String shortReason(String result) {
         java.util.List<String> lines=new java.util.ArrayList<>();
         for(String line:result.split("\n")) {
+            if(line.startsWith("ยังไม่ยืนยันว่าหน้างานเปิด"))continue;
+            if(line.contains("พักการเปิดงานซ้อน")){lines.add("บันทึกจากรุ่นก่อน");continue;}
+            if(line.contains("CanceledException")){lines.add("งานหมดอายุแล้ว");continue;}
+            if(line.contains("SecurityException")){lines.add("ระบบไม่อนุญาตให้เปิดงาน");continue;}
+            if(line.contains("ส่งคำสั่งเปิดแล้ว")){lines.add("เรียกเปิดงานแล้ว");continue;}
+            if(line.contains("ไม่มีคำสั่งเปิด")){lines.add("เปิดงานนี้ไม่ได้");continue;}
+            if(line.contains("ปิดเปิดงานอัตโนมัติ")){lines.add("ตรงเงื่อนไข / ยังไม่เปิดอัตโนมัติ");continue;}
+            if(line.startsWith("อ่านข้อมูลงานไม่ได้")){lines.add("อ่านงานนี้ไม่ได้");continue;}
             if(line.contains("ต่ำกว่าขั้นต่ำ") || line.equals("ราคาต่ำกว่าที่ตั้งไว้")) line="ราคาต่ำไป";
             else if(line.contains("สูงกว่าขั้นสูง") || line.equals("ราคาสูงกว่าที่ตั้งไว้")) line="ราคาสูงไป";
             else if(line.startsWith("ไม่ตรงเงื่อนไข: ต้นทาง") || line.equals("ต้นทางไม่ตรงเงื่อนไข")) line="ต้นทางไม่ตรง";

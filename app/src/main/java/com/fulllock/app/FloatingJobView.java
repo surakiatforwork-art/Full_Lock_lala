@@ -38,11 +38,12 @@ final class FloatingJobView {
     FloatingJobView(Context context,Consumer<FloatingJobs.Item> open){this.context=context;this.open=open;wm=context.getSystemService(WindowManager.class);}
     private int dp(float n){return (int)(n*context.getResources().getDisplayMetrics().density+.5f);}
     private GradientDrawable background(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
-    private TextView text(String value,int size,boolean bold){TextView t=new TextView(context);t.setText(value);t.setTextSize(size);t.setTextColor(Color.WHITE);if(bold)t.setTypeface(null,Typeface.BOLD);return t;}
+    private TextView text(String value,int size,boolean bold){TextView t=new TextView(context);t.setText(value);t.setTextSize(size);t.setTextColor(AppTheme.onAccent(context));if(bold)t.setTypeface(null,Typeface.BOLD);return t;}
+    void refreshTheme(){if(fab==null)return;fab.setTextColor(AppTheme.onAccent(context));fab.setBackground(background(AppTheme.accent(context),24));if(panel!=null){panel.setBackground(background(AppTheme.accent(context),14));((TextView)panel.getChildAt(0)).setTextColor(AppTheme.onAccent(context));}render();}
     boolean visible(){return fab!=null;}
     void show(){
         if(fab!=null || !Settings.canDrawOverlays(context))return;
-        fab=new OutsideFab();fab.setTextSize(17);fab.setTextColor(Color.WHITE);fab.setTypeface(null,Typeface.BOLD);fab.setGravity(Gravity.CENTER);fab.setBackground(background(0xFFF16527,24));fab.setElevation(dp(6));
+        fab=new OutsideFab();fab.setTextSize(17);fab.setTextColor(AppTheme.onAccent(context));fab.setTypeface(null,Typeface.BOLD);fab.setGravity(Gravity.CENTER);fab.setBackground(background(AppTheme.accent(context),24));fab.setElevation(dp(6));
         fabParams=params(dp(48));fabParams.height=dp(48);
         fabParams.x=Store.prefs(context).getInt("floatX",dp(8));fabParams.y=Store.prefs(context).getInt("floatY",dp(180));clampFab();
         fab.setOnClickListener(v->toggle());
@@ -76,7 +77,7 @@ final class FloatingJobView {
         fab.setText(model.unread>99?"99+":String.valueOf(model.unread));fab.setContentDescription("งานยังไม่เปิดดู "+model.unread+" รายการ แตะดูงานล่าสุด ลากเพื่อย้าย");
         if(model.mode==FloatingJobs.Mode.COLLAPSED){removePanel();return;}
         if(panel==null){
-            panel=new OutsidePanel();panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(7),dp(5),dp(7),dp(5));panel.setBackground(background(0xFFF16527,14));panel.setElevation(dp(6));
+            panel=new OutsidePanel();panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(7),dp(5),dp(7),dp(5));panel.setBackground(background(AppTheme.accent(context),14));panel.setElevation(dp(6));
             TextView close=text("งานล่าสุด                         ×",10,false);close.setPadding(dp(3),dp(3),dp(3),dp(5));close.setOnClickListener(v->{handler.removeCallbacks(timeout);model.collapse();render();});panel.addView(close);
             ScrollView scroll=new ScrollView(context);scroll.setVerticalScrollBarEnabled(false);
             rows=new LinearLayout(context);rows.setOrientation(LinearLayout.VERTICAL);rows.setClipChildren(false);

@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Granted by the user's Usage Access app-op, not a runtime/system permission grant. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
-    <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="Full Lock" android:icon="@drawable/ic_lock" android:allowBackup="false" android:supportsRtl="true">
+    <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="Full Lock" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:allowBackup="false" android:fullBackupContent="@xml/backup_rules" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false" android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>

@@ -1,7 +1,50 @@
 plugins { id 'com.android.application' }
+
+// Private signing material lives outside this checkout. Never fall back to debug signing.
+def signingFile = file(System.getenv('FULLLOCK_SIGNING_PROPERTIES') ?: "${System.getProperty('user.home')}/.fulllock/signing/release.properties")
+def releaseKeys = new Properties()
+if (signingFile.exists()) signingFile.withInputStream { releaseKeys.load(it) }
+def signingReady = ['storeFile','storePassword','keyAlias','keyPassword'].every { releaseKeys.getProperty(it) }
+def signerSha256 = ''
+if (signingReady) {
+    def ks = java.security.KeyStore.getInstance('PKCS12')
+    file(releaseKeys.storeFile).withInputStream { ks.load(it, releaseKeys.storePassword.toCharArray()) }
+    signerSha256 = java.security.MessageDigest.getInstance('SHA-256').digest(ks.getCertificate(releaseKeys.keyAlias).encoded).encodeHex().toString()
+}
 android {
     namespace 'com.fulllock.app'
     compileSdk 35
-    defaultConfig { applicationId 'com.fulllock.app'; minSdk 26; targetSdk 35; versionCode 8; versionName '0.1.7'; testInstrumentationRunner 'com.fulllock.app.OverlayChecks' }
+    defaultConfig { applicationId 'com.fulllock.app'; minSdk 26; targetSdk 35; versionCode 10; versionName '0.1.9'; testInstrumentationRunner 'com.fulllock.app.OverlayChecks' }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        if (signingReady) {
+            production {
+                storeFile file(releaseKeys.storeFile)
+                storePassword releaseKeys.storePassword
+                keyAlias releaseKeys.keyAlias
+                keyPassword releaseKeys.keyPassword
+                storeType 'PKCS12'
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+    buildTypes {
+        debug { buildConfigField 'String', 'SIGNER_SHA256', '""' }
+        release {
+            debuggable false
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            buildConfigField 'String', 'SIGNER_SHA256', '"' + signerSha256 + '"'
+            if (signingReady) signingConfig signingConfigs.production
+        }
+    }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+tasks.configureEach {
+    if (name == 'preReleaseBuild') doFirst {
+        if (!signingReady) throw new GradleException('Release requires private signing properties. See docs/security.md; debug signing is not permitted.')
+    }
 }
