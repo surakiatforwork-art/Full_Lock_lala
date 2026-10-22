@@ -72,3 +72,14 @@ javac -encoding UTF-8 -d app/build/parser-checks app/src/main/java/com/fulllock/
 java -cp app/build/parser-checks ParserChecks
 java -cp app/build/parser-checks com.fulllock.app.FloatingChecks
 ```
+
+## รุ่น 0.1.6 — อ่านงานต่อเนื่องและแยกสวิตช์
+
+- Build และ lint ผ่าน (0 errors / 5 warnings), ParserChecks ผ่าน 29 ข้อ และ FloatingChecks ผ่าน 21 ข้อ
+- OverlayChecks บน emulator ผ่าน 56 ข้อ รวมการ inject การแตะจริงนอกแผงเพื่อหุบและแตะแถวภายในโดยไม่หุบผิด
+- ตรวจการทำงานจริงของ service ด้วย notification จำลอง: ปิดอัตโนมัติยังคำนวณ/แสดง ✓/เก็บประวัติ/นับงาน, ปิด FAB ยังรับงาน, เปิด FAB กลับมีจำนวนเดิม, สลับอัตโนมัติไม่ล้างจำนวน
+- ประกาศ GPS ongoing แจ้งเตือนที่มีรูปเหมือนงานแต่ตั้ง ongoing และ group summary ไม่เพิ่มรายการ จำนวน ประวัติ หรือเวลารับงานล่าสุด
+- ใช้ PendingIntent broadcast probe ยืนยันว่าปิดอัตโนมัติไม่ส่งคำสั่ง เปิดอัตโนมัติแล้วส่ง 1 ครั้ง ปิดอีกครั้งไม่ส่งเพิ่ม และการเปิดด้วยตนเองยังส่งได้เมื่อปิดอัตโนมัติ
+- Probe เป็น broadcast สำหรับทดสอบ ไม่ใช่การเปิด activity ของ Lalamove จริง ซึ่งยังต้องทดสอบบนมือถือผู้ใช้
+- ตัวอ่านยังต้องมี notification access และ service ต้องเชื่อมต่อกับ Android การปิดสวิตช์อัตโนมัติหรือ FAB ไม่หยุดตัวอ่าน
+- รองรับรูปแบบงานหัวข้อ `[หมวด] ต้นทาง > ปลายทาง` และเนื้อความขึ้นต้นด้วยประเภทงานตามด้วยราคา รูปแบบไม่รองรับจะข้าม ไม่เก็บเป็นประกาศหรือเพิ่มตัวนับ

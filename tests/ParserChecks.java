@@ -28,6 +28,15 @@ public class ParserChecks {
         check(second.price(1,20).compareTo(new BigDecimal("147"))==0,"second sample total");
         check(JobParser.parse("[ขนส่งสินค้า] A > B","ขนส่งทันที ฿150 + ฿20 + ฿5")==null,"three amounts rejected");
         check(JobParser.parse("[ขนส่งสินค้า] A > B","ขนส่งทันที ฿150 / ฿20")==null,"ambiguous amounts rejected");
-        System.out.println("ParserChecks: 21 checks passed");
+        String title="[ขนส่งสินค้า] บางคูรัด > หัวหมาก",body="ขนส่งทันที ฿276.00 + ฿10.00 รับงานขนส่ง!";
+        check(JobParser.notificationJob(title,body,false,false)!=null,"real job eligible");
+        check(JobParser.notificationJob(title,body,true,false)==null,"ongoing job-shaped notification ignored");
+        check(JobParser.notificationJob(title,body,false,true)==null,"group summary ignored");
+        check(JobParser.notificationJob("GPS กำลังทำงาน","กำลังติดตามตำแหน่ง",true,false)==null,"GPS ignored");
+        check(JobParser.notificationJob("ประกาศ","ขนส่งทันที รับโบนัส ฿200",false,false)==null,"announcement ignored");
+        check(JobParser.notificationJob(title,"ประกาศ ตัวอย่างงาน: "+body,false,false)==null,"announcement quoting job ignored");
+        check(JobParser.notificationJob(title,"งานล่วงหน้า ฿156.00 รับงานขนส่ง!",false,false)!=null,"scheduled job eligible");
+        check(JobParser.notificationJob(title,null,false,false)==null,"empty notification ignored");
+        System.out.println("ParserChecks: 29 checks passed");
     }
 }

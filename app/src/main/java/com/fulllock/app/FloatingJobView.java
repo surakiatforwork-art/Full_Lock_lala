@@ -24,6 +24,17 @@ final class FloatingJobView {
     private int startX,startY;
     private boolean dragged;
     private final Runnable timeout=()->{model.expire();render();};
+    private final class OutsideFab extends TextView {
+        OutsideFab(){super(FloatingJobView.this.context);}
+        @Override public boolean dispatchTouchEvent(MotionEvent e){if(e.getActionMasked()==MotionEvent.ACTION_OUTSIDE){outside(e);return true;}return super.dispatchTouchEvent(e);}
+    }
+    private final class OutsidePanel extends LinearLayout {
+        OutsidePanel(){super(FloatingJobView.this.context);}
+        @Override public boolean dispatchTouchEvent(MotionEvent e){if(e.getActionMasked()==MotionEvent.ACTION_OUTSIDE){outside(e);return true;}return super.dispatchTouchEvent(e);}
+    }
+    private boolean contains(View view,float x,float y){if(view==null)return false;int[] location=new int[2];view.getLocationOnScreen(location);return x>=location[0] && x<location[0]+view.getWidth() && y>=location[1] && y<location[1]+view.getHeight();}
+    private void outside(MotionEvent event){if(model.mode!=FloatingJobs.Mode.COLLAPSED && !contains(fab,event.getRawX(),event.getRawY()) && !contains(panel,event.getRawX(),event.getRawY()))collapse();}
+    private void collapse(){handler.removeCallbacks(timeout);model.collapse();render();}
     FloatingJobView(Context context,Consumer<FloatingJobs.Item> open){this.context=context;this.open=open;wm=context.getSystemService(WindowManager.class);}
     private int dp(float n){return (int)(n*context.getResources().getDisplayMetrics().density+.5f);}
     private GradientDrawable background(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
@@ -31,7 +42,7 @@ final class FloatingJobView {
     boolean visible(){return fab!=null;}
     void show(){
         if(fab!=null || !Settings.canDrawOverlays(context))return;
-        fab=text("0",17,true);fab.setGravity(Gravity.CENTER);fab.setBackground(background(0xFFF16527,24));fab.setElevation(dp(6));
+        fab=new OutsideFab();fab.setTextSize(17);fab.setTextColor(Color.WHITE);fab.setTypeface(null,Typeface.BOLD);fab.setGravity(Gravity.CENTER);fab.setBackground(background(0xFFF16527,24));fab.setElevation(dp(6));
         fabParams=params(dp(48));fabParams.height=dp(48);
         fabParams.x=Store.prefs(context).getInt("floatX",dp(8));fabParams.y=Store.prefs(context).getInt("floatY",dp(180));clampFab();
         fab.setOnClickListener(v->toggle());
@@ -50,7 +61,7 @@ final class FloatingJobView {
         });
         try{wm.addView(fab,fabParams);render();}catch(SecurityException | WindowManager.BadTokenException e){fab=null;}
     }
-    private WindowManager.LayoutParams params(int width){WindowManager.LayoutParams p=new WindowManager.LayoutParams(width,-2,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,PixelFormat.TRANSLUCENT);p.gravity=Gravity.TOP|Gravity.LEFT;return p;}
+    private WindowManager.LayoutParams params(int width){WindowManager.LayoutParams p=new WindowManager.LayoutParams(width,-2,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,PixelFormat.TRANSLUCENT);p.gravity=Gravity.TOP|Gravity.LEFT;return p;}
     private int screenWidth(){return context.getResources().getDisplayMetrics().widthPixels;}
     private int screenHeight(){return context.getResources().getDisplayMetrics().heightPixels;}
     private boolean onLeft(){return fabParams.x+dp(24)<screenWidth()/2;}
@@ -65,7 +76,7 @@ final class FloatingJobView {
         fab.setText(model.unread>99?"99+":String.valueOf(model.unread));fab.setContentDescription("งานยังไม่เปิดดู "+model.unread+" รายการ แตะดูงานล่าสุด ลากเพื่อย้าย");
         if(model.mode==FloatingJobs.Mode.COLLAPSED){removePanel();return;}
         if(panel==null){
-            panel=new LinearLayout(context);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(7),dp(5),dp(7),dp(5));panel.setBackground(background(0xFFF16527,14));panel.setElevation(dp(6));
+            panel=new OutsidePanel();panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(7),dp(5),dp(7),dp(5));panel.setBackground(background(0xFFF16527,14));panel.setElevation(dp(6));
             TextView close=text("งานล่าสุด                         ×",10,false);close.setPadding(dp(3),dp(3),dp(3),dp(5));close.setOnClickListener(v->{handler.removeCallbacks(timeout);model.collapse();render();});panel.addView(close);
             ScrollView scroll=new ScrollView(context);scroll.setVerticalScrollBarEnabled(false);
             rows=new LinearLayout(context);rows.setOrientation(LinearLayout.VERTICAL);rows.setClipChildren(false);
@@ -73,6 +84,7 @@ final class FloatingJobView {
             AnimatorSet appear=new AnimatorSet();appear.playTogether(ObjectAnimator.ofFloat(null,"alpha",0f,1f),ObjectAnimator.ofFloat(null,"translationY",-dp(10),0f));transition.setAnimator(LayoutTransition.APPEARING,appear);
             AnimatorSet disappear=new AnimatorSet();disappear.playTogether(ObjectAnimator.ofFloat(null,"alpha",1f,0f),ObjectAnimator.ofFloat(null,"translationY",0f,dp(32)));transition.setAnimator(LayoutTransition.DISAPPEARING,disappear);transition.setDuration(220);rows.setLayoutTransition(transition);
             scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,-2));panelParams=params(Math.min(dp(205),screenWidth()-dp(70)));
+            panelParams.x=Math.max(0,Math.min(onLeft()?fabParams.x+dp(54):fabParams.x-panelParams.width-dp(6),screenWidth()-panelParams.width));panelParams.y=fabParams.y;
             try{wm.addView(panel,panelParams);}catch(SecurityException | WindowManager.BadTokenException e){panel=null;rows=null;return;}
         }
         List<FloatingJobs.Item> desired=model.mode==FloatingJobs.Mode.PREVIEW?model.items.subList(0,Math.min(1,model.items.size())):model.items;

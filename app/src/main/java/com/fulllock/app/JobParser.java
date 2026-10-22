@@ -16,6 +16,11 @@ public final class JobParser {
     }
     private static final Pattern ROUTE = Pattern.compile("^\\s*\\[([^]]+)]\\s*(.+?)\\s*>\\s*(.+?)\\s*$");
     private static final Pattern MONEY = Pattern.compile("฿\\s*([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)(?![0-9.,])");
+    private static final Pattern JOB_START = Pattern.compile("^\\s*(?:ขนส่งทันที|งานล่วงหน้า)\\s+฿");
+    public static Job notificationJob(String title,String text,boolean ongoing,boolean summary) {
+        if(ongoing || summary || text==null || !JOB_START.matcher(text).find())return null;
+        return parse(title,text);
+    }
     public static Job parse(String title, String text) {
         if (title == null || text == null) return null;
         Matcher route = ROUTE.matcher(title);

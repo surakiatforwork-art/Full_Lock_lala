@@ -13,7 +13,8 @@ public class JobListener extends NotificationListenerService {
     private ForegroundWatcher foregroundWatcher;
     private final Map<String,String> seen = new LinkedHashMap<>();
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener changes=(p,key)->{
-        if("enabled".equals(key)) { floating.reset();seen.clear();lastAttempt=0;updateWatcher();syncFloating(); }
+        if("enabled".equals(key))lastAttempt=0;
+        if("floatingEnabled".equals(key)) { updateWatcher();syncFloating(); }
     };
     static final String DRIVER = "com.lalamove.global.driver.sea";
     private long lastAttempt;
@@ -26,10 +27,10 @@ public class JobListener extends NotificationListenerService {
     static void refreshFloating() { if(instance!=null)instance.syncFloating(); }
     static boolean floatingVisible(){return instance!=null && instance.floating!=null && instance.floating.visible();}
     private void syncFloating() {
-        if(!connected || !Store.prefs(this).getBoolean("enabled",false) || !android.provider.Settings.canDrawOverlays(this) || foregroundWatcher.blocked()) {floating.hide();return;}
+        if(!connected || !Store.prefs(this).getBoolean("floatingEnabled",true) || !android.provider.Settings.canDrawOverlays(this) || foregroundWatcher.blocked()) {floating.hide();return;}
         floating.show();
     }
-    private void updateWatcher(){if(connected && Store.prefs(this).getBoolean("enabled",false)){foregroundWatcher.refresh();foregroundWatcher.start();}else foregroundWatcher.stop();}
+    private void updateWatcher(){if(connected && Store.prefs(this).getBoolean("floatingEnabled",true)){foregroundWatcher.refresh();foregroundWatcher.start();}else foregroundWatcher.stop();}
     @Override public void onListenerConnected() { connected=true;updateWatcher();syncFloating(); }
     @Override public void onListenerDisconnected() { connected=false;foregroundWatcher.stop();floating.hide(); }
     @Override public void onDestroy() {
@@ -37,13 +38,14 @@ public class JobListener extends NotificationListenerService {
         foregroundWatcher.stop();floating.hide();if(instance==this)instance=null;super.onDestroy();
     }
     @Override public void onNotificationRemoved(StatusBarNotification sbn) {
+        seen.remove(sbn.getKey());
         floating.removed(sbn.getKey(),sbn.getPostTime());
     }
     private void record(String title,String text,boolean worked,String reason) {
         Store.log(this,title,text,worked,reason);
     }
     private void openFloatingJob(FloatingJobs.Item item) {
-        if(!connected || !Store.prefs(this).getBoolean("enabled",false))return;
+        if(!connected)return;
         try {
             StatusBarNotification target=null;
             StatusBarNotification[] activeNotifications=getActiveNotifications();
@@ -66,27 +68,26 @@ public class JobListener extends NotificationListenerService {
     }
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
         if (!DRIVER.equals(sbn.getPackageName())) return;
-        Store.prefs(this).edit().putLong("lastReceived",System.currentTimeMillis()).apply();
         Notification n = sbn.getNotification();
-        if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return;
+        boolean ongoing=(n.flags & Notification.FLAG_ONGOING_EVENT)!=0, summary=(n.flags & Notification.FLAG_GROUP_SUMMARY)!=0;
+        if(ongoing || summary)return;
         String title = String.valueOf(n.extras.getCharSequence(Notification.EXTRA_TITLE,""));
         String regular = String.valueOf(n.extras.getCharSequence(Notification.EXTRA_TEXT,""));
         CharSequence big = n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
         String text = big == null || big.toString().isBlank() ? regular : big.toString();
+        JobParser.Job job=JobParser.notificationJob(title,text,ongoing,summary);
+        if(job==null && !text.equals(regular)){job=JobParser.notificationJob(title,regular,ongoing,summary);if(job!=null)text=regular;}
+        // Only real job offers enter history, counters, filtering, or the floating list.
+        if(job==null)return;
         String fingerprint = title + "\n" + text;
         if (fingerprint.equals(seen.get(sbn.getKey()))) return;
         seen.put(sbn.getKey(),fingerprint);
         if (seen.size()>200) seen.remove(seen.keySet().iterator().next());
-        if (!Store.prefs(this).getBoolean("enabled",false)) { record(title,text,false,"ผู้ใช้ปิดการทำงานอยู่"); return; }
-        JobParser.Job job = JobParser.parse(title,text);
-        if (job == null && !text.equals(regular)) {
-            job=JobParser.parse(title,regular);
-            if(job!=null) text=regular;
-        }
-        String rejection=job==null?null:Store.rejection(this,job);
-        syncFloating();floating.offer(new FloatingJobs.Item(sbn.getKey(),sbn.getPostTime(),title,text,job,job!=null && rejection==null,n.contentIntent!=null));
-        if (job == null) { record(title,text,false,"อ่านข้อมูลงานไม่ได้: ไม่พบเส้นทาง ประเภทงาน หรือราคาในรูปแบบที่รองรับ"); return; }
+        Store.prefs(this).edit().putLong("lastReceived",System.currentTimeMillis()).apply();
+        String rejection=Store.rejection(this,job);
+        syncFloating();floating.offer(new FloatingJobs.Item(sbn.getKey(),sbn.getPostTime(),title,text,job,rejection==null,n.contentIntent!=null));
         if (rejection != null) { record(title,text,false,rejection); return; }
+        if(!Store.prefs(this).getBoolean("enabled",false)){record(title,text,false,"ตรงเงื่อนไข / ปิดเปิดงานอัตโนมัติ");return;}
         if (n.contentIntent == null) { record(title,text,false,"ตรงเงื่อนไข แต่แจ้งเตือนไม่มีคำสั่งเปิดหน้างาน"); return; }
         long now = SystemClock.elapsedRealtime();
         int cooldown = Store.prefs(this).getInt("cooldown",15);

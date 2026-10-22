@@ -32,7 +32,7 @@ public class MainActivity extends Activity {
         p().registerOnSharedPreferenceChangeListener(updates);
         render();
     }
-    @Override protected void onResume() { super.onResume(); JobListener.refreshFloating();render();if(p().getBoolean("enabled",false)&&Settings.canDrawOverlays(this))offerUsagePermission(); }
+    @Override protected void onResume() { super.onResume();reconnect();JobListener.refreshFloating();render();if(p().getBoolean("floatingEnabled",true)&&Settings.canDrawOverlays(this))offerUsagePermission(); }
     @Override protected void onStart(){super.onStart();foreground=true;JobListener.refreshFloating();}
     @Override protected void onStop(){foreground=false;JobListener.refreshFloating();super.onStop();}
     @Override protected void onDestroy() { p().unregisterOnSharedPreferenceChangeListener(updates); super.onDestroy(); }
@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
         header=column();header.setBackgroundColor(orange);pad(header,22,8,22,22);root.addView(header);
         LinearLayout toolbar=row();TextView menu=label("☰",30,Color.WHITE,false);pad(menu,0,0,18,0);menu.setContentDescription("เปิดเมนูสิทธิ์และการตั้งค่า");menu.setOnClickListener(v->showDrawer());toolbar.addView(menu);
         TextView brand=label("FULL LOCK",17,Color.WHITE,true);brand.setLetterSpacing(.12f);toolbar.addView(brand,new LinearLayout.LayoutParams(0,dp(48),1));brand.setGravity(Gravity.CENTER_VERTICAL);
-        TextView status=label(p().getBoolean("enabled",false)?"●  เปิดอยู่":"●  ปิดอยู่",12,Color.WHITE,false);toolbar.addView(status);header.addView(toolbar);
+        TextView status=label(p().getBoolean("enabled",false)?"●  เปิดงานอัตโนมัติ":"●  อ่านงานอย่างเดียว",11,Color.WHITE,false);toolbar.addView(status);header.addView(toolbar);
         space(header,15);header.addView(label(history?"ประวัติแจ้งเตือน":"ตั้งค่าการรับงาน",27,Color.WHITE,true));
         space(header,3);header.addView(label(history?"ติดตามผลการกรองและการเปิดงาน":"เลือกงานที่ใช่ แล้วปัดรับด้วยตัวคุณเอง",14,0xFFFFE2D7,false));
         space(header,14);LinearLayout chips=row();chip(chips,"▣  Lalamove Driver");chip(chips,"เปิดจากแจ้งเตือน");header.addView(chips);
@@ -61,9 +61,9 @@ public class MainActivity extends Activity {
         body=column();pad(body,16,14,16,16);scroll.addView(body);
         if(history) historyBody();else settingsBody();
         LinearLayout footer=column();footer.setBackgroundColor(Color.WHITE);pad(footer,18,12,18,14);View border=new View(this);border.setBackgroundColor(orange);footer.addView(border,new LinearLayout.LayoutParams(-1,dp(2)));space(footer,10);
-        footer.addView(label("คุณเป็นคนปัดรับงานเอง",15,ink,true));space(footer,2);footer.addView(label("แอปช่วยกรองและเปิดงานที่ตรงเงื่อนไข",12,muted,false));space(footer,10);
-        TextView start=label(p().getBoolean("enabled",false)?"■     หยุดการทำงาน":"→     เริ่มทำงาน",19,Color.WHITE,true);start.setGravity(Gravity.CENTER);start.setBackground(bg(orange,10));footer.addView(start,new LinearLayout.LayoutParams(-1,dp(54)));
-        start.setOnClickListener(v->{boolean enabled=p().getBoolean("enabled",false);if(!enabled&&!access()){new AlertDialog.Builder(this).setTitle("อนุญาตการอ่านแจ้งเตือนก่อน").setMessage("เลือก Full Lock แล้วเปิดสิทธิ์การเข้าถึงการแจ้งเตือน").setPositiveButton("เปิดการตั้งค่า",(d,w)->open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)).setNegativeButton("ยกเลิก",null).show();return;}p().edit().putBoolean("enabled",!enabled).apply();if(!enabled)reconnect();render();if(!enabled)offerFloatingPermission();});
+        footer.addView(label("อ่านงานตลอด · ผู้ใช้ปัดรับงานเอง",15,ink,true));space(footer,2);footer.addView(label("สวิตช์นี้ควบคุมเฉพาะการเปิดงานอัตโนมัติ",12,muted,false));space(footer,10);
+        TextView start=label(p().getBoolean("enabled",false)?"■     หยุดเปิดงานอัตโนมัติ":"→     เริ่มเปิดงานอัตโนมัติ",18,Color.WHITE,true);start.setGravity(Gravity.CENTER);start.setBackground(bg(orange,10));footer.addView(start,new LinearLayout.LayoutParams(-1,dp(54)));
+        start.setOnClickListener(v->{boolean enabled=p().getBoolean("enabled",false);if(!enabled&&!access()){new AlertDialog.Builder(this).setTitle("อนุญาตการอ่านแจ้งเตือนก่อน").setMessage("เลือก Full Lock แล้วเปิดสิทธิ์การเข้าถึงการแจ้งเตือน").setPositiveButton("เปิดการตั้งค่า",(d,w)->open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)).setNegativeButton("ยกเลิก",null).show();return;}p().edit().putBoolean("enabled",!enabled).apply();if(!enabled)reconnect();render();});
         root.addView(footer);setContentView(frame);
     }
     private void chip(LinearLayout parent,String text) { TextView t=label(text,12,ink,false);pad(t,10,6,10,6);t.setBackground(bg(0xFFFFF3EE,5));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,-2);lp.rightMargin=dp(8);parent.addView(t,lp); }
@@ -75,13 +75,16 @@ public class MainActivity extends Activity {
     }
     private void toggle(LinearLayout c,String title,String subtitle,String key,boolean def) {
         LinearLayout r=row();pad(r,0,5,0,8);LinearLayout text=column();text.addView(label(title,16,ink,true));if(subtitle!=null){space(text,2);text.addView(label(subtitle,12,muted,false));}r.addView(text,new LinearLayout.LayoutParams(0,-2,1));
-        Switch s=new Switch(this);s.setButtonTintList(null);s.setThumbTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));s.setTrackTintList(new android.content.res.ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{orange,0xFFD9DADF}));s.setContentDescription(title);s.setChecked(p().getBoolean(key,def));s.setOnCheckedChangeListener((v,checked)->p().edit().putBoolean(key,checked).apply());r.addView(s);c.addView(r);
+        Switch s=new Switch(this);s.setButtonTintList(null);s.setThumbTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));s.setTrackTintList(new android.content.res.ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{orange,0xFFD9DADF}));s.setContentDescription(title);s.setChecked(p().getBoolean(key,def));s.setOnCheckedChangeListener((v,checked)->{p().edit().putBoolean(key,checked).apply();if("floatingEnabled".equals(key)&&checked)offerFloatingPermission();});r.addView(s);c.addView(r);
     }
     private void item(LinearLayout c,String title,String value,Runnable click) {
         LinearLayout r=row();pad(r,0,13,0,13);r.addView(label(title,14,ink,false),new LinearLayout.LayoutParams(0,-2,1));TextView val=label(value+"  ›",14,orange,false);val.setGravity(Gravity.END);val.setMaxWidth(dp(185));r.addView(val);r.setOnClickListener(v->click.run());c.addView(r);
     }
     private void settingsBody() {
-        LinearLayout c=card("01  /  ราคางาน","฿  กำหนดช่วงราคา");toggle(c,"กรองราคางาน","เปิดเฉพาะงานในช่วงราคาที่กำหนด","price",true);line(c);
+        LinearLayout c=card(null,"การอ่านงานและปุ่มลอย");toggle(c,"เปิดปุ่มลอย FAB","ใช้ได้แม้ปิดเปิดงานอัตโนมัติ","floatingEnabled",true);
+        item(c,"สิทธิ์อ่านแจ้งเตือน",access()?"อนุญาตแล้ว":"ยังไม่อนุญาต",()->open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+        c.addView(label("อ่านและกรองเฉพาะแจ้งเตือนงานตลอดเวลา ไม่เก็บประกาศหรือ GPS",12,muted,false));
+        c=card("01  /  ราคางาน","฿  กำหนดช่วงราคา");toggle(c,"กรองราคางาน","เปิดเฉพาะงานในช่วงราคาที่กำหนด","price",true);line(c);
         LinearLayout prices=row();priceBox(prices,"ราคาต่ำสุด","min","100");priceBox(prices,"ราคาสูงสุด","max","2000");c.addView(prices);line(c);
         String[] formulas={"ราคาอย่างเดียว","ราคา + ทิป","ราคาหักค่าธรรมเนียม","ราคาหักค่าธรรมเนียม + ทิป"};
         item(c,"สูตรคำนวณ",formulas[p().getInt("formula",0)],()->choose("สูตรคำนวณราคา","formula",formulas));
@@ -120,13 +123,14 @@ public class MainActivity extends Activity {
         item(nav,"อ่านแจ้งเตือน",access()?"อนุญาตแล้ว":"ยังไม่อนุญาต",()->open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
         boolean canNotify=getSystemService(NotificationManager.class).areNotificationsEnabled();
         item(nav,"แจ้งเตือนงานที่พบ",canNotify?"อนุญาตแล้ว":"ยังไม่อนุญาต",()->{if(Build.VERSION.SDK_INT>=33&&!canNotify)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},1);else startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));});
-        item(nav,"ปุ่มลอยนอกแอป",Settings.canDrawOverlays(this)?"อนุญาตแล้ว":"อนุญาตสิทธิ์",()->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName()))));
+        toggle(nav,"เปิดปุ่มลอย FAB",null,"floatingEnabled",true);
+        item(nav,"สิทธิ์แสดงปุ่มลอย",Settings.canDrawOverlays(this)?"อนุญาตแล้ว":"อนุญาตสิทธิ์",()->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName()))));
         nav.addView(label("FAB แสดงจำนวนงานยังไม่อ่าน แตะดู 5 งานล่าสุด งานใหม่แสดง 3 วินาทีแล้วหุบ",12,muted,false));
         item(nav,"ซ่อน FAB ใน Lalamove",ForegroundWatcher.allowed(this)?"อนุญาตแล้ว":"อนุญาตสิทธิ์",()->open(Settings.ACTION_USAGE_ACCESS_SETTINGS));
         nav.addView(label("อนุญาตเข้าถึงข้อมูลการใช้งานแอป เพื่อซ่อน FAB เมื่อ Lalamove Driver อยู่เบื้องหน้า Full Lock ซ่อนอัตโนมัติอยู่แล้ว",12,muted,false));
         item(nav,"การใช้แบตเตอรี่","เปิดตั้งค่า",()->startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName()))));
         space(nav,16);line(nav);space(nav,16);nav.addView(label("ทดสอบตัวกรอง",16,ink,true));item(nav,"แจ้งเตือนตัวอย่าง","ทดสอบ",()->sample());item(nav,"ตรวจการทำงาน","ตรวจสอบ",()->diagnostics());
-        space(nav,22);nav.addView(label("Full Lock 0.1.5 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
+        space(nav,22);nav.addView(label("Full Lock 0.1.6 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
     }
     private void sample() {
         new AlertDialog.Builder(this).setTitle("เลือกแจ้งเตือนตัวอย่าง").setItems(new String[]{"ไม่มีทิป · ฿156.00","มีทิป · ฿276.00 + ฿10.00","มีทิป · ฿129.00 + ฿18.00"},(dialog,index)->{
@@ -147,13 +151,13 @@ public class MainActivity extends Activity {
     private void offerUsagePermission(){if(!ForegroundWatcher.allowed(this)&&!p().getBoolean("usagePromptShown",false)){p().edit().putBoolean("usagePromptShown",true).apply();new AlertDialog.Builder(this).setTitle("ซ่อน FAB ขณะใช้ Lalamove").setMessage("อนุญาตเข้าถึงข้อมูลการใช้งานแอป เพื่อดูว่า Lalamove Driver อยู่เบื้องหน้าหรือไม่ แล้วซ่อน FAB ให้อัตโนมัติ").setPositiveButton("เปิดการตั้งค่า",(d,w)->open(Settings.ACTION_USAGE_ACCESS_SETTINGS)).setNegativeButton("ภายหลัง",null).show();}}
     private void diagnostics() {
         long last=p().getLong("lastReceived",0);
-        String report="Full Lock 0.1.5\nเครื่อง: "+Build.MANUFACTURER+" "+Build.MODEL+"\nAndroid "+Build.VERSION.RELEASE+" ("+Build.VERSION.SDK_INT+")\nเปิดทำงาน: "+p().getBoolean("enabled",false)+"\nสิทธิ์อ่านแจ้งเตือน: "+access()+"\nตัวอ่านเชื่อมต่อ: "+JobListener.connected+"\nแจ้งเตือนของแอป: "+getSystemService(NotificationManager.class).areNotificationsEnabled()+"\nแสดงเหนือแอปอื่น: "+Settings.canDrawOverlays(this)+"\nสิทธิ์ข้อมูลการใช้งาน: "+ForegroundWatcher.allowed(this)+"\nปุ่มลอยแสดงอยู่: "+JobListener.floatingVisible()+"\nได้รับจาก Lalamove ล่าสุด: "+(last==0?"ยังไม่เคย":java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(last)));
+        String report="Full Lock 0.1.6\nเครื่อง: "+Build.MANUFACTURER+" "+Build.MODEL+"\nAndroid "+Build.VERSION.RELEASE+" ("+Build.VERSION.SDK_INT+")\nเปิดงานอัตโนมัติ: "+p().getBoolean("enabled",false)+"\nสิทธิ์อ่านแจ้งเตือน: "+access()+"\nตัวอ่านเชื่อมต่อ: "+JobListener.connected+"\nแจ้งเตือนของแอป: "+getSystemService(NotificationManager.class).areNotificationsEnabled()+"\nแสดงเหนือแอปอื่น: "+Settings.canDrawOverlays(this)+"\nสิทธิ์ข้อมูลการใช้งาน: "+ForegroundWatcher.allowed(this)+"\nปุ่มลอยแสดงอยู่: "+JobListener.floatingVisible()+"\nเปิด FAB: "+p().getBoolean("floatingEnabled",true)+"\nได้รับงานจาก Lalamove ล่าสุด: "+(last==0?"ยังไม่เคย":java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(last)));
         try {JSONArray entries=new JSONArray(p().getString("history","[]"));if(entries.length()>0)report+="\nผลล่าสุด: "+entries.getJSONObject(0).getString("result");}catch(JSONException ignored){}
         final String details=report;
         new AlertDialog.Builder(this).setTitle("ตรวจการทำงาน").setMessage(details).setPositiveButton("คัดลอกข้อมูล",(d,w)->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Full Lock diagnostics",details))).setNeutralButton("เชื่อมต่อตัวอ่านอีกครั้ง",(d,w)->{reconnect();Toast.makeText(this,"ส่งคำขอแล้ว ตรวจสถานะอีกครั้ง",Toast.LENGTH_LONG).show();}).setNegativeButton("ปิด",null).show();
     }
     private void historyBody() {
-        try{JSONArray entries=new JSONArray(p().getString("history","[]"));if(entries.length()==0){LinearLayout c=card(null,"ยังไม่มีแจ้งเตือน");c.addView(label("เปิดสิทธิ์อ่านแจ้งเตือนและกดเริ่มทำงาน\nเมื่อมีงานเข้า ผลการตรวจจะแสดงที่นี่",14,muted,false));}
+        try{JSONArray entries=new JSONArray(p().getString("history","[]"));if(entries.length()==0){LinearLayout c=card(null,"ยังไม่มีแจ้งเตือนงาน");c.addView(label("อนุญาตอ่านแจ้งเตือนแล้วรอรับงานได้เลย\nอ่านและบันทึกงานแม้ปิดเปิดงานอัตโนมัติ",14,muted,false));}
             for(int i=0;i<entries.length();i++){
                 JSONObject e=entries.getJSONObject(i);LinearLayout c=card(java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT,java.text.DateFormat.MEDIUM).format(new java.util.Date(e.getLong("time"))),e.getString("title"));
                 c.addView(label(e.getString("text"),14,ink,false));space(c,12);
