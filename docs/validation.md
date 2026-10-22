@@ -53,3 +53,22 @@ adb shell am instrument -w com.fulllock.app.test/com.fulllock.app.OverlayChecks
 ```
 
 เพิ่ม `-e preview true` ก่อนชื่อ runner เพื่อบันทึกภาพทดสอบใน external files ของแอป ข้อมูลตั้งค่าและประวัติก่อนทดสอบจะถูกคืนค่าตอนจบ runner
+
+## รุ่น 0.1.5 — FAB และรายการ 5 งาน
+
+- Build, Android test APK และ lint ผ่าน (0 errors / 5 warnings)
+- ParserChecks 21 ข้อ และ FloatingChecks 21 ข้อผ่าน รวมจำนวนยังไม่อ่าน ข้อมูลเกิน 5 รายการ การไม่ล้างจำนวนจาก preview และรายการใหม่ระหว่างเปิดค้าง
+- OverlayChecks บน emulator ผ่าน 36 ข้อ รวม FAB 48dp, preview รายการเดียวและหุบหลัง 3 วินาที, เปิด 5 รายการแล้วไม่หุบ, ใหม่บนสุด, กดเลือกแถวที่ไม่ใช่งานล่าสุด, หมดอายุแล้วไม่เปิด, ตัวหนา/เครื่องหมายถูก/ไม่แสดงเหตุผล และขยายซ้าย/ขวาตามตำแหน่ง
+- ตรวจภาพ `fulllock-fab-left.png`, `fulllock-fab-right.png`, `fulllock-fab-counter.png` แล้ว
+- การทดสอบซ่อนใน Full Lock/Driver ใช้สถานะ foreground จำลองภายใน runner ไม่ได้เปิดแอป Driver จริง การอ่าน UsageEvents และการเปิดหน้างานจริงยังต้องทดสอบบนมือถือผู้ใช้
+- ใช้ PACKAGE_USAGE_STATS ผ่าน app-op ที่ผู้ใช้เปิดใน Usage Access เท่านั้น อนุญาตให้ตรวจเฉพาะเหตุการณ์ Driver เพื่อซ่อน overlay ไม่ส่งข้อมูลออกนอกเครื่อง ตรวจประมาณทุก 750ms และซ่อนเมื่อจอดับ/ล็อก
+- Android อาจซ่อน overlay บนหน้าระบบหรือแอปที่บล็อก ไม่มีการข้ามข้อจำกัดนั้น
+- Runner บน emulator reset การอนุญาต notification listener ระหว่างเริ่มรันเพื่อแก้ binding ค้างจาก instrumentation force-stop อย่ารันบนเครื่องใช้งานจริงโดยไม่ตั้งใจ
+
+ตรวจ model เพิ่มเติม:
+
+```powershell
+javac -encoding UTF-8 -d app/build/parser-checks app/src/main/java/com/fulllock/app/JobParser.java app/src/main/java/com/fulllock/app/FloatingJobs.java tests/ParserChecks.java tests/FloatingChecks.java
+java -cp app/build/parser-checks ParserChecks
+java -cp app/build/parser-checks com.fulllock.app.FloatingChecks
+```

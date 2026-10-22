@@ -15,6 +15,7 @@ import org.json.*;
 import java.math.BigDecimal;
 
 public class MainActivity extends Activity {
+    static volatile boolean foreground;
     private final int orange=0xFFE94A19, ink=0xFF26272C, muted=0xFF81838B;
     private LinearLayout root, body, header;
     private FrameLayout frame;
@@ -31,7 +32,9 @@ public class MainActivity extends Activity {
         p().registerOnSharedPreferenceChangeListener(updates);
         render();
     }
-    @Override protected void onResume() { super.onResume(); JobListener.refreshFloating();render(); }
+    @Override protected void onResume() { super.onResume(); JobListener.refreshFloating();render();if(p().getBoolean("enabled",false)&&Settings.canDrawOverlays(this))offerUsagePermission(); }
+    @Override protected void onStart(){super.onStart();foreground=true;JobListener.refreshFloating();}
+    @Override protected void onStop(){foreground=false;JobListener.refreshFloating();super.onStop();}
     @Override protected void onDestroy() { p().unregisterOnSharedPreferenceChangeListener(updates); super.onDestroy(); }
     private GradientDrawable bg(int color,int radius) { GradientDrawable d=new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(radius)); return d; }
     private TextView label(String s,int size,int color,boolean bold) {
@@ -118,10 +121,12 @@ public class MainActivity extends Activity {
         boolean canNotify=getSystemService(NotificationManager.class).areNotificationsEnabled();
         item(nav,"แจ้งเตือนงานที่พบ",canNotify?"อนุญาตแล้ว":"ยังไม่อนุญาต",()->{if(Build.VERSION.SDK_INT>=33&&!canNotify)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},1);else startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));});
         item(nav,"ปุ่มลอยนอกแอป",Settings.canDrawOverlays(this)?"อนุญาตแล้ว":"อนุญาตสิทธิ์",()->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName()))));
-        nav.addView(label("อนุญาตแสดงเหนือแอปอื่นเพื่อใช้ปุ่มลอย ดูงานล่าสุด แตะเปิดงาน หรือลากย้ายตำแหน่ง ปุ่มแสดงเมื่อเริ่มทำงานเท่านั้น",12,muted,false));
+        nav.addView(label("FAB แสดงจำนวนงานยังไม่อ่าน แตะดู 5 งานล่าสุด งานใหม่แสดง 3 วินาทีแล้วหุบ",12,muted,false));
+        item(nav,"ซ่อน FAB ใน Lalamove",ForegroundWatcher.allowed(this)?"อนุญาตแล้ว":"อนุญาตสิทธิ์",()->open(Settings.ACTION_USAGE_ACCESS_SETTINGS));
+        nav.addView(label("อนุญาตเข้าถึงข้อมูลการใช้งานแอป เพื่อซ่อน FAB เมื่อ Lalamove Driver อยู่เบื้องหน้า Full Lock ซ่อนอัตโนมัติอยู่แล้ว",12,muted,false));
         item(nav,"การใช้แบตเตอรี่","เปิดตั้งค่า",()->startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName()))));
         space(nav,16);line(nav);space(nav,16);nav.addView(label("ทดสอบตัวกรอง",16,ink,true));item(nav,"แจ้งเตือนตัวอย่าง","ทดสอบ",()->sample());item(nav,"ตรวจการทำงาน","ตรวจสอบ",()->diagnostics());
-        space(nav,22);nav.addView(label("Full Lock 0.1.4 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
+        space(nav,22);nav.addView(label("Full Lock 0.1.5 · รุ่นทดสอบ\nทำงานแยกจาก Automagic\nไม่ปัดรับงานแทนผู้ใช้",12,muted,false));
     }
     private void sample() {
         new AlertDialog.Builder(this).setTitle("เลือกแจ้งเตือนตัวอย่าง").setItems(new String[]{"ไม่มีทิป · ฿156.00","มีทิป · ฿276.00 + ฿10.00","มีทิป · ฿129.00 + ฿18.00"},(dialog,index)->{
@@ -136,11 +141,13 @@ public class MainActivity extends Activity {
     }
     private void offerFloatingPermission() {
         JobListener.refreshFloating();
-        if(!Settings.canDrawOverlays(this))new AlertDialog.Builder(this).setTitle("เปิดใช้ปุ่มลอยนอกแอป").setMessage("อนุญาตแสดงเหนือแอปอื่น เพื่อแสดงแจ้งเตือนงานล่าสุดและแตะเปิดงานได้จากปุ่มลอย").setPositiveButton("อนุญาต",(d,w)->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName())))).setNegativeButton("ภายหลัง",null).show();
+        if(!Settings.canDrawOverlays(this))new AlertDialog.Builder(this).setTitle("เปิดใช้ปุ่มลอยนอกแอป").setMessage("อนุญาตแสดงเหนือแอปอื่น เพื่อแสดง FAB งานล่าสุด").setPositiveButton("อนุญาต",(d,w)->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName())))).setNegativeButton("ภายหลัง",null).show();
+        else offerUsagePermission();
     }
+    private void offerUsagePermission(){if(!ForegroundWatcher.allowed(this)&&!p().getBoolean("usagePromptShown",false)){p().edit().putBoolean("usagePromptShown",true).apply();new AlertDialog.Builder(this).setTitle("ซ่อน FAB ขณะใช้ Lalamove").setMessage("อนุญาตเข้าถึงข้อมูลการใช้งานแอป เพื่อดูว่า Lalamove Driver อยู่เบื้องหน้าหรือไม่ แล้วซ่อน FAB ให้อัตโนมัติ").setPositiveButton("เปิดการตั้งค่า",(d,w)->open(Settings.ACTION_USAGE_ACCESS_SETTINGS)).setNegativeButton("ภายหลัง",null).show();}}
     private void diagnostics() {
         long last=p().getLong("lastReceived",0);
-        String report="Full Lock 0.1.4\nเครื่อง: "+Build.MANUFACTURER+" "+Build.MODEL+"\nAndroid "+Build.VERSION.RELEASE+" ("+Build.VERSION.SDK_INT+")\nเปิดทำงาน: "+p().getBoolean("enabled",false)+"\nสิทธิ์อ่านแจ้งเตือน: "+access()+"\nตัวอ่านเชื่อมต่อ: "+JobListener.connected+"\nแจ้งเตือนของแอป: "+getSystemService(NotificationManager.class).areNotificationsEnabled()+"\nแสดงเหนือแอปอื่น: "+Settings.canDrawOverlays(this)+"\nปุ่มลอยแสดงอยู่: "+JobListener.floatingVisible()+"\nได้รับจาก Lalamove ล่าสุด: "+(last==0?"ยังไม่เคย":java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(last)));
+        String report="Full Lock 0.1.5\nเครื่อง: "+Build.MANUFACTURER+" "+Build.MODEL+"\nAndroid "+Build.VERSION.RELEASE+" ("+Build.VERSION.SDK_INT+")\nเปิดทำงาน: "+p().getBoolean("enabled",false)+"\nสิทธิ์อ่านแจ้งเตือน: "+access()+"\nตัวอ่านเชื่อมต่อ: "+JobListener.connected+"\nแจ้งเตือนของแอป: "+getSystemService(NotificationManager.class).areNotificationsEnabled()+"\nแสดงเหนือแอปอื่น: "+Settings.canDrawOverlays(this)+"\nสิทธิ์ข้อมูลการใช้งาน: "+ForegroundWatcher.allowed(this)+"\nปุ่มลอยแสดงอยู่: "+JobListener.floatingVisible()+"\nได้รับจาก Lalamove ล่าสุด: "+(last==0?"ยังไม่เคย":java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(last)));
         try {JSONArray entries=new JSONArray(p().getString("history","[]"));if(entries.length()>0)report+="\nผลล่าสุด: "+entries.getJSONObject(0).getString("result");}catch(JSONException ignored){}
         final String details=report;
         new AlertDialog.Builder(this).setTitle("ตรวจการทำงาน").setMessage(details).setPositiveButton("คัดลอกข้อมูล",(d,w)->getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Full Lock diagnostics",details))).setNeutralButton("เชื่อมต่อตัวอ่านอีกครั้ง",(d,w)->{reconnect();Toast.makeText(this,"ส่งคำขอแล้ว ตรวจสถานะอีกครั้ง",Toast.LENGTH_LONG).show();}).setNegativeButton("ปิด",null).show();

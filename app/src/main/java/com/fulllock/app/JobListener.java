@@ -10,62 +10,56 @@ public class JobListener extends NotificationListenerService {
     static volatile boolean connected;
     private static JobListener instance;
     private FloatingJobView floating;
-    private StatusBarNotification latest;
-    private JobParser.Job latestJob;
-    private String latestText="", latestResult="";
-    private boolean latestWorked;
+    private ForegroundWatcher foregroundWatcher;
     private final Map<String,String> seen = new LinkedHashMap<>();
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener changes=(p,key)->{
-        if("enabled".equals(key)) { latest=null;latestJob=null;latestResult="";seen.clear();lastAttempt=0;syncFloating(); }
+        if("enabled".equals(key)) { floating.reset();seen.clear();lastAttempt=0;updateWatcher();syncFloating(); }
     };
     static final String DRIVER = "com.lalamove.global.driver.sea";
     private long lastAttempt;
     @Override public void onCreate() {
         super.onCreate();instance=this;
         floating=new FloatingJobView(this,this::openFloatingJob);
+        foregroundWatcher=new ForegroundWatcher(this,this::syncFloating);
         Store.prefs(this).registerOnSharedPreferenceChangeListener(changes);
     }
     static void refreshFloating() { if(instance!=null)instance.syncFloating(); }
     static boolean floatingVisible(){return instance!=null && instance.floating!=null && instance.floating.visible();}
     private void syncFloating() {
-        if(!connected || !Store.prefs(this).getBoolean("enabled",false) || !android.provider.Settings.canDrawOverlays(this)) {floating.hide();return;}
+        if(!connected || !Store.prefs(this).getBoolean("enabled",false) || !android.provider.Settings.canDrawOverlays(this) || foregroundWatcher.blocked()) {floating.hide();return;}
         floating.show();
-        if(latest!=null){floating.latest(String.valueOf(latest.getNotification().extras.getCharSequence(Notification.EXTRA_TITLE,"")),latestText,latestJob,latest.getNotification().contentIntent!=null);floating.result(latestWorked,latestResult);}
     }
-    @Override public void onListenerConnected() { connected=true;syncFloating(); }
-    @Override public void onListenerDisconnected() { connected=false;floating.hide();latest=null; }
+    private void updateWatcher(){if(connected && Store.prefs(this).getBoolean("enabled",false)){foregroundWatcher.refresh();foregroundWatcher.start();}else foregroundWatcher.stop();}
+    @Override public void onListenerConnected() { connected=true;updateWatcher();syncFloating(); }
+    @Override public void onListenerDisconnected() { connected=false;foregroundWatcher.stop();floating.hide(); }
     @Override public void onDestroy() {
         connected=false;Store.prefs(this).unregisterOnSharedPreferenceChangeListener(changes);
-        floating.hide();latest=null;if(instance==this)instance=null;super.onDestroy();
+        foregroundWatcher.stop();floating.hide();if(instance==this)instance=null;super.onDestroy();
     }
     @Override public void onNotificationRemoved(StatusBarNotification sbn) {
-        if(latest!=null && latest.getKey().equals(sbn.getKey()) && sbn.getPostTime()>=latest.getPostTime()) {
-            latest=null;floating.unavailable();
-        }
+        floating.removed(sbn.getKey(),sbn.getPostTime());
     }
     private void record(String title,String text,boolean worked,String reason) {
         Store.log(this,title,text,worked,reason);
-        latestWorked=worked;latestResult=reason;
-        if(Store.prefs(this).getBoolean("enabled",false))floating.result(worked,reason);
     }
-    private void openFloatingJob() {
+    private void openFloatingJob(FloatingJobs.Item item) {
         if(!connected || !Store.prefs(this).getBoolean("enabled",false))return;
-        if(latest==null){android.widget.Toast.makeText(this,"ยังไม่มีแจ้งเตือนงานที่เปิดได้",android.widget.Toast.LENGTH_SHORT).show();return;}
         try {
             StatusBarNotification target=null;
             StatusBarNotification[] activeNotifications=getActiveNotifications();
-            if(activeNotifications==null){floating.result(false,"ตัวอ่านยังไม่เชื่อมต่อ");return;}
+            if(activeNotifications==null){toast("ตัวอ่านยังไม่เชื่อมต่อ");return;}
             for(StatusBarNotification active:activeNotifications)
-                if(active.getKey().equals(latest.getKey()) && active.getPostTime()==latest.getPostTime()) {target=active;break;}
-            if(target==null){latest=null;floating.unavailable();return;}
+                if(active.getKey().equals(item.key) && active.getPostTime()==item.postTime) {target=active;break;}
+            if(target==null){floating.removed(item.key,item.postTime);toast("แจ้งเตือนนี้ไม่อยู่แล้ว");return;}
             PendingIntent intent=target.getNotification().contentIntent;
             String title=String.valueOf(target.getNotification().extras.getCharSequence(Notification.EXTRA_TITLE,""));
-            if(intent==null){record(title,latestText,false,"ไม่มีคำสั่งเปิดงาน");return;}
+            if(intent==null){record(title,item.text,false,"ไม่มีคำสั่งเปิดงาน");toast("ไม่มีคำสั่งเปิดงาน");return;}
             sendOpen(intent);
-            record(title,latestText,true,"แตะปุ่มลอย · ส่งคำสั่งเปิดแล้ว");
-        }catch(PendingIntent.CanceledException e){floating.unavailable();latest=null;}
-        catch(SecurityException e){floating.result(false,"ระบบไม่อนุญาตให้เปิดงาน");}
+            record(title,item.text,true,"แตะปุ่มลอย · ส่งคำสั่งเปิดแล้ว");
+        }catch(PendingIntent.CanceledException e){floating.removed(item.key,item.postTime);toast("คำสั่งเปิดงานหมดอายุ");}
+        catch(SecurityException e){toast("ระบบไม่อนุญาตให้เปิดงาน");}
     }
+    private void toast(String message){android.widget.Toast.makeText(this,message,android.widget.Toast.LENGTH_SHORT).show();}
     private void sendOpen(PendingIntent intent) throws PendingIntent.CanceledException {
         if(Build.VERSION.SDK_INT>=34){ActivityOptions opts=ActivityOptions.makeBasic();opts.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);intent.send(this,0,null,null,null,null,opts.toBundle());}
         else intent.send();
@@ -89,9 +83,9 @@ public class JobListener extends NotificationListenerService {
             job=JobParser.parse(title,regular);
             if(job!=null) text=regular;
         }
-        latest=sbn;latestJob=job;latestText=text;latestWorked=false;latestResult="กำลังตรวจเงื่อนไข";syncFloating();
+        String rejection=job==null?null:Store.rejection(this,job);
+        syncFloating();floating.offer(new FloatingJobs.Item(sbn.getKey(),sbn.getPostTime(),title,text,job,job!=null && rejection==null,n.contentIntent!=null));
         if (job == null) { record(title,text,false,"อ่านข้อมูลงานไม่ได้: ไม่พบเส้นทาง ประเภทงาน หรือราคาในรูปแบบที่รองรับ"); return; }
-        String rejection = Store.rejection(this,job);
         if (rejection != null) { record(title,text,false,rejection); return; }
         if (n.contentIntent == null) { record(title,text,false,"ตรงเงื่อนไข แต่แจ้งเตือนไม่มีคำสั่งเปิดหน้างาน"); return; }
         long now = SystemClock.elapsedRealtime();
