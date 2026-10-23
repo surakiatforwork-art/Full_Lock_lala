@@ -22,7 +22,7 @@ public final class ProfileFile {
     }
     public static final class Data {
         public final String name;public final LinkedHashMap<String,Object> values;
-        public Data(String name,Map<String,Object> values){this.name=name(name);this.values=new LinkedHashMap<>(DEFAULTS);this.values.putAll(values);validate(this.values);}
+        public Data(String name,Map<String,Object> values){this.name=name(name);this.values=new LinkedHashMap<>(DEFAULTS);this.values.putAll(values);if(Integer.valueOf(3).equals(this.values.get("serviceMask")))this.values.put("serviceMask",1);validate(this.values);}
     }
     public static String name(String text){String value=Normalizer.normalize(text.trim(),Normalizer.Form.NFC);if(value.isEmpty()||value.codePointCount(0,value.length())>60||value.codePoints().anyMatch(Character::isISOControl))throw new IllegalArgumentException("ชื่อโปรไฟล์ไม่ถูกต้อง");return value;}
     private static void validate(Map<String,Object> values){
@@ -30,7 +30,7 @@ public final class ProfileFile {
         for(var entry:DEFAULTS.entrySet()){Object value=values.get(entry.getKey());if(value==null||value.getClass()!=entry.getValue().getClass())throw new IllegalArgumentException("ข้อมูลโปรไฟล์ไม่ถูกต้อง");}
         for(String key:new String[]{"min","max"}){String money=(String)values.get(key);if(!money.matches("[0-9]+(\\.[0-9]{1,2})?"))throw new IllegalArgumentException("ช่วงราคาไม่ถูกต้อง");}
         if(new BigDecimal((String)values.get("min")).compareTo(new BigDecimal((String)values.get("max")))>0)throw new IllegalArgumentException("ช่วงราคาไม่ถูกต้อง");
-        range(values,"formula",0,3);range(values,"fee",0,100);range(values,"type",0,2);range(values,"serviceMask",1,3);
+        range(values,"formula",0,3);range(values,"fee",0,100);range(values,"type",0,2);range(values,"serviceMask",1,2);
         if(((Integer)values.get("themeColor")>>>24)!=255)throw new IllegalArgumentException("สีโปรไฟล์ไม่ถูกต้อง");
     }
     private static void range(Map<String,Object> values,String key,int min,int max){int n=(Integer)values.get(key);if(n<min||n>max)throw new IllegalArgumentException("ค่าโปรไฟล์ไม่ถูกต้อง");}

@@ -20,7 +20,7 @@ final class FilterChecks {
         JobParser.Job passenger=JobParser.parse("[รับ-ส่งผู้โดยสาร] บางกระสอ > บางกระสอ","ขนส่งทันที ฿48.00 รับงานขนส่ง!");
         check("ประเภทงานไม่ตรง".equals(Store.rejection(c,passenger)),"legacy goods selection rejects passenger");
         p.edit().putInt("serviceMask",2).apply();check(Store.rejection(c,passenger)==null,"passenger selection accepts passenger");check("ประเภทงานไม่ตรง".equals(Store.rejection(c,job("A","B"))),"passenger only rejects goods");
-        p.edit().putInt("serviceMask",3).apply();check(Store.rejection(c,passenger)==null&&Store.rejection(c,job("A","B"))==null,"multiple service choices accept both");
+        p.edit().putInt("serviceMask",3).apply();check("ประเภทงานไม่ตรง".equals(Store.rejection(c,passenger))&&Store.rejection(c,job("A","B"))==null,"legacy both-services value defaults to goods");
         p.edit().putInt("type",2).apply();check("ประเภทงานไม่ตรง".equals(Store.rejection(c,passenger)),"time still applies to passenger");
         p.edit().putInt("type",0).putInt("serviceMask",1).putBoolean("price",true).apply();return count;
     }

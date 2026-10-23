@@ -16,7 +16,7 @@ final class Profiles {
         JSONArray list=entries();String id=prefs.getString(ACTIVE,"");
         if(list.length()==0){id=UUID.randomUUID().toString();list.put(entry(id,new ProfileFile.Data("โปรไฟล์เริ่มต้น",snapshot())));prefs.edit().putString(LIST,list.toString()).putString(ACTIVE,id).apply();}
         else if(find(list,id)<0){id=list.optJSONObject(0).optString("id");apply(list,id,data(list.optJSONObject(0)));}
-        saveActive();prefs.registerOnSharedPreferenceChangeListener(listener);
+        if(prefs.getInt("serviceMask",1)==3)prefs.edit().putInt("serviceMask",1).apply();saveActive();prefs.registerOnSharedPreferenceChangeListener(listener);
     }
     static synchronized JSONArray entries(){try{return new JSONArray(prefs.getString(LIST,"[]"));}catch(Exception e){return new JSONArray();}}
     static String active(){return prefs.getString(ACTIVE,"");}

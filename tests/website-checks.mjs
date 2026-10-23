@@ -25,7 +25,7 @@ const buckets={origins:new Set([origin.id]),destinations:new Set(),excludedOrigi
 const settings=routeSettings(buckets,ids);assert.equal(settings.origins,'คลองสาม');assert.equal(settings.excludedOrigins,'คลองสามประเวศ');assert.equal(settings.originOn,true);assert.equal(settings.destOn,false);
 const duplicate=catalog.areas.filter(a=>a.name==='บ้านใหม่');assert.ok(duplicate.length>1);assert.equal(routeSettings({...buckets,origins:new Set(duplicate.map(a=>a.id))},ids).origins,'บ้านใหม่');
 assert.throws(()=>routeSettings({...buckets,origins:new Set(north.map(a=>a.id))},ids),/มากเกินขนาด/);
-const bytes=Buffer.from(await encodeProfile('แผนที่ประเทศไทย',{...settings,serviceMask:3}));const raw=inflateSync(bytes.subarray(21));assert.equal(crc32(raw),bytes.readUInt32BE(17));
+const bytes=Buffer.from(await encodeProfile('แผนที่ประเทศไทย',{...settings,serviceMask:2}));const raw=inflateSync(bytes.subarray(21));assert.equal(crc32(raw),bytes.readUInt32BE(17));
 await mkdir('app/build/profile-fixtures',{recursive:true});await writeFile('app/build/profile-fixtures/website.flp',bytes);
 const html=await readFile('index.html','utf8');assert.ok(!html.includes('github.com/surakiatforwork-art'));assert.equal([...html.matchAll(/href="web\/downloads\/FullLock.apk" download="FullLock.apk"/g)].length,4);
 // Every local asset linked by the root entry point is present before publication.
