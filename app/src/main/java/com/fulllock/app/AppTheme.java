@@ -11,6 +11,7 @@ import android.widget.*;
 final class AppTheme {
     static final int DEFAULT=0xFFE94A19;
     static int accent(Context c){return Store.prefs(c).getInt("themeColor",DEFAULT)|0xFF000000;}
+    static int jobColor(Context c,JobParser.Job job){int color=accent(c);if(job!=null&&"งานล่วงหน้า".equals(job.type())){float[] hsv=new float[3];Color.colorToHSV(color,hsv);hsv[0]=(hsv[0]+180)%360;return Color.HSVToColor(hsv);}return color;}
     static boolean inverted(Context c){return Store.prefs(c).getBoolean("invertText",false);}
     static int ink(Context c){return inverted(c)?Color.WHITE:0xFF26272C;}
     static int muted(Context c){return inverted(c)?0xFFBDC1CA:0xFF777B85;}

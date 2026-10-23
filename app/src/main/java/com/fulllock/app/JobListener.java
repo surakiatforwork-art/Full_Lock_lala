@@ -11,6 +11,7 @@ public class JobListener extends NotificationListenerService {
     private static JobListener instance;
     private FloatingJobView floating;
     private ForegroundWatcher foregroundWatcher;
+    private final Map<String,PendingIntent> jobActions=new LinkedHashMap<>();
     private final Map<String,String> seen = new LinkedHashMap<>();
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener changes=(p,key)->{
         if("floatingEnabled".equals(key)) { updateWatcher();syncFloating(); }
@@ -41,8 +42,8 @@ public class JobListener extends NotificationListenerService {
         seen.remove(sbn.getKey());
         floating.removed(sbn.getKey(),sbn.getPostTime());
     }
-    private void record(String title,String text,boolean worked,String reason) {
-        Store.log(this,title,text,worked,reason);
+    private void record(StatusBarNotification notification,String title,String text,boolean worked,String reason) {
+        Store.log(this,title,text,worked,reason,notification.getKey(),notification.getPostTime());
     }
     private void openFloatingJob(FloatingJobs.Item item) {
         if(!connected)return;
@@ -55,11 +56,35 @@ public class JobListener extends NotificationListenerService {
             if(target==null){floating.removed(item.key,item.postTime);toast("แจ้งเตือนนี้ไม่อยู่แล้ว");return;}
             PendingIntent intent=target.getNotification().contentIntent;
             String title=String.valueOf(target.getNotification().extras.getCharSequence(Notification.EXTRA_TITLE,""));
-            if(intent==null){record(title,item.text,false,"เปิดงานนี้ไม่ได้");toast("เปิดงานนี้ไม่ได้");return;}
+            if(intent==null){record(target,title,item.text,false,"เปิดงานนี้ไม่ได้");toast("เปิดงานนี้ไม่ได้");return;}
             sendOpen(intent);
-            record(title,item.text,true,"เปิดจากปุ่มลอยแล้ว");
+            record(target,title,item.text,true,"เปิดจากปุ่มลอยแล้ว");
         }catch(PendingIntent.CanceledException e){floating.removed(item.key,item.postTime);toast("งานนี้หมดอายุแล้ว");}
         catch(SecurityException e){toast("ระบบไม่อนุญาตให้เปิดงาน");}
+    }
+    private static String actionKey(String key,long time,String title,String text){return key+"\n"+time+"\n"+title+"\n"+text;}
+    static boolean openHistory(org.json.JSONObject entry){
+        if(instance==null||!connected)return false;
+        try{return instance.openHistory(entry,instance.getActiveNotifications());}catch(SecurityException e){return false;}
+    }
+    private boolean openHistory(org.json.JSONObject entry,StatusBarNotification[] active){
+        String key=entry.optString("notificationKey","");long time=entry.optLong("notificationTime",0);
+        if(key.isEmpty()||time==0||active==null)return false;
+        String title=entry.optString("title"),text=entry.optString("text");
+        for(StatusBarNotification notification:active){
+            if(!DRIVER.equals(notification.getPackageName())||!key.equals(notification.getKey())||time!=notification.getPostTime())continue;
+            Notification n=notification.getNotification();
+            String currentTitle=String.valueOf(n.extras.getCharSequence(Notification.EXTRA_TITLE,""));
+            String regular=String.valueOf(n.extras.getCharSequence(Notification.EXTRA_TEXT,""));
+            CharSequence big=n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
+            String currentText=big==null||big.toString().isBlank()?regular:big.toString();
+            if(!title.equals(currentTitle)||(!text.equals(currentText)&&!text.equals(regular)))return false;
+            PendingIntent intent=jobActions.get(actionKey(key,time,title,text));
+            if(intent==null)intent=n.contentIntent;
+            if(intent==null)return false;
+            try{sendOpen(intent);return true;}catch(PendingIntent.CanceledException|SecurityException e){jobActions.remove(actionKey(key,time,title,text));return false;}
+        }
+        return false;
     }
     private void toast(String message){android.widget.Toast.makeText(this,message,android.widget.Toast.LENGTH_SHORT).show();}
     private void sendOpen(PendingIntent intent) throws PendingIntent.CanceledException {
@@ -80,6 +105,7 @@ public class JobListener extends NotificationListenerService {
         if(job==null && !text.equals(regular)){job=JobParser.notificationJob(title,regular,ongoing,summary);if(job!=null)text=regular;}
         // Only real job offers enter history, counters, filtering, or the floating list.
         if(job==null)return;
+        if(n.contentIntent!=null){jobActions.put(actionKey(sbn.getKey(),sbn.getPostTime(),title,text),n.contentIntent);if(jobActions.size()>60)jobActions.remove(jobActions.keySet().iterator().next());}
         String fingerprint = title + "\n" + text;
         if (fingerprint.equals(seen.get(sbn.getKey()))) return;
         seen.put(sbn.getKey(),fingerprint);
@@ -87,15 +113,15 @@ public class JobListener extends NotificationListenerService {
         Store.prefs(this).edit().putLong("lastReceived",System.currentTimeMillis()).apply();
         String rejection=Store.rejection(this,job);
         syncFloating();floating.offer(new FloatingJobs.Item(sbn.getKey(),sbn.getPostTime(),title,text,job,rejection==null,n.contentIntent!=null));
-        if (rejection != null) { record(title,text,false,rejection); return; }
-        if(!Store.prefs(this).getBoolean("enabled",false)){record(title,text,false,"ตรงเงื่อนไข / ยังไม่เปิดอัตโนมัติ");return;}
-        if (n.contentIntent == null) { record(title,text,false,"ตรงเงื่อนไข / เปิดงานนี้ไม่ได้"); return; }
+        if (rejection != null) { record(sbn,title,text,false,rejection); return; }
+        if(!Store.prefs(this).getBoolean("enabled",false)){record(sbn,title,text,false,"ตรงเงื่อนไข / ยังไม่เปิดอัตโนมัติ");return;}
+        if (n.contentIntent == null) { record(sbn,title,text,false,"ตรงเงื่อนไข / เปิดงานนี้ไม่ได้"); return; }
         try {
             sendOpen(n.contentIntent);
-            record(title,text,true,"ตรงเงื่อนไข / เรียกเปิดงานแล้ว");
+            record(sbn,title,text,true,"ตรงเงื่อนไข / เรียกเปิดงานแล้ว");
             offerManual(n.contentIntent,title);
         } catch (PendingIntent.CanceledException | SecurityException e) {
-            record(title,text,false,e instanceof PendingIntent.CanceledException?"งานหมดอายุแล้ว":"ระบบไม่อนุญาตให้เปิดงาน");
+            record(sbn,title,text,false,e instanceof PendingIntent.CanceledException?"งานหมดอายุแล้ว":"ระบบไม่อนุญาตให้เปิดงาน");
             offerManual(n.contentIntent,title);
         }
     }

@@ -20,7 +20,7 @@ final class FloatingJobs {
     Mode mode=Mode.COLLAPSED;
     void put(Item item,boolean visible) {
         boolean existing=items.removeIf(old->old.id.equals(item.id));
-        items.add(0,item);if(items.size()>5)items.remove(items.size()-1);
+        items.add(0,item);if(items.size()>10)items.remove(items.size()-1);
         if(mode==Mode.PINNED)unread=0;
         else {if(!existing)unread++;if(visible)mode=Mode.PREVIEW;}
     }

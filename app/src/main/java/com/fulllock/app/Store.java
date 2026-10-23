@@ -46,9 +46,12 @@ final class Store {
         return String.join(" / ",lines);
     }
     static synchronized void log(Context c, String title, String text, boolean worked, String result) {
+        log(c,title,text,worked,result,"",0);
+    }
+    static synchronized void log(Context c,String title,String text,boolean worked,String result,String key,long postTime) {
         try {
             JSONArray old = new JSONArray(prefs(c).getString("history", "[]")), next = new JSONArray();
-            next.put(new JSONObject().put("title",title).put("text",text).put("worked",worked).put("result",result).put("time",System.currentTimeMillis()));
+            next.put(new JSONObject().put("title",title).put("text",text).put("worked",worked).put("result",result).put("time",System.currentTimeMillis()).put("notificationKey",key).put("notificationTime",postTime));
             for (int i=0;i<Math.min(old.length(),29);i++) next.put(old.get(i));
             prefs(c).edit().putString("history",next.toString()).apply();
         } catch(JSONException ignored) { }

@@ -19,6 +19,10 @@ final class FloatingJobView {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private TextView fab;
     private LinearLayout panel,rows;
+    private ScrollView scroll;
+    private boolean closing;
+    private static final long SLIDE_MS=400;
+    private int rowHeight(){return dp(86*Math.max(1,context.getResources().getConfiguration().fontScale));}
     private WindowManager.LayoutParams fabParams,panelParams;
     private float downX,downY;
     private int startX,startY;
@@ -39,7 +43,7 @@ final class FloatingJobView {
     private int dp(float n){return (int)(n*context.getResources().getDisplayMetrics().density+.5f);}
     private GradientDrawable background(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
     private TextView text(String value,int size,boolean bold){TextView t=new TextView(context);t.setText(value);t.setTextSize(size);t.setTextColor(AppTheme.onAccent(context));if(bold)t.setTypeface(null,Typeface.BOLD);return t;}
-    void refreshTheme(){if(fab==null)return;fab.setTextColor(AppTheme.onAccent(context));fab.setBackground(background(AppTheme.accent(context),24));if(panel!=null){panel.setBackground(background(AppTheme.accent(context),14));((TextView)panel.getChildAt(0)).setTextColor(AppTheme.onAccent(context));}render();}
+    void refreshTheme(){if(fab==null)return;fab.setTextColor(AppTheme.onAccent(context));fab.setBackground(background(AppTheme.accent(context),24));render();}
     boolean visible(){return fab!=null;}
     void show(){
         if(fab!=null || !Settings.canDrawOverlays(context))return;
@@ -68,25 +72,25 @@ final class FloatingJobView {
     private boolean onLeft(){return fabParams.x+dp(24)<screenWidth()/2;}
     private void clampFab(){fabParams.x=Math.max(0,Math.min(fabParams.x,screenWidth()-dp(48)));fabParams.y=Math.max(0,Math.min(fabParams.y,screenHeight()-dp(110)));}
     private void updateFab(){if(fab!=null)try{wm.updateViewLayout(fab,fabParams);}catch(IllegalArgumentException | SecurityException e){hide();}}
-    void offer(FloatingJobs.Item item){model.put(item,visible());handler.removeCallbacks(timeout);render();if(model.mode==FloatingJobs.Mode.PREVIEW)handler.postDelayed(timeout,3000);}
+    void offer(FloatingJobs.Item item){model.put(item,visible());handler.removeCallbacks(timeout);render();if(scroll!=null)scroll.scrollTo(0,0);if(model.mode==FloatingJobs.Mode.PREVIEW)handler.postDelayed(timeout,3000);}
     void toggle(){handler.removeCallbacks(timeout);if(model.mode==FloatingJobs.Mode.PINNED)model.collapse();else model.open();render();}
     void removed(String key,long time){model.removed(key,time);render();}
     void reset(){handler.removeCallbacks(timeout);model.reset();render();}
     private void render(){
         if(fab==null)return;
         fab.setText(model.unread>99?"99+":String.valueOf(model.unread));fab.setContentDescription("งานยังไม่เปิดดู "+model.unread+" รายการ แตะดูงานล่าสุด ลากเพื่อย้าย");
-        if(model.mode==FloatingJobs.Mode.COLLAPSED){removePanel();return;}
+        if(model.mode==FloatingJobs.Mode.COLLAPSED){closePanel();return;}
+        if(closing&&panel!=null){panel.animate().cancel();closing=false;panel.animate().alpha(1).translationX(0).setDuration(SLIDE_MS).start();}
         if(panel==null){
-            panel=new OutsidePanel();panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(7),dp(5),dp(7),dp(5));panel.setBackground(background(AppTheme.accent(context),14));panel.setElevation(dp(6));
-            TextView close=text("งานล่าสุด                         ×",10,false);close.setPadding(dp(3),dp(3),dp(3),dp(5));close.setOnClickListener(v->{handler.removeCallbacks(timeout);model.collapse();render();});panel.addView(close);
-            ScrollView scroll=new ScrollView(context);scroll.setVerticalScrollBarEnabled(false);
+            panel=new OutsidePanel();panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(7),dp(5),dp(7),dp(5));panel.setBackgroundColor(Color.TRANSPARENT);
+            scroll=new ScrollView(context);scroll.setVerticalScrollBarEnabled(true);scroll.setFillViewport(false);
             rows=new LinearLayout(context);rows.setOrientation(LinearLayout.VERTICAL);rows.setClipChildren(false);
             LayoutTransition transition=new LayoutTransition();transition.enableTransitionType(LayoutTransition.CHANGING);
             AnimatorSet appear=new AnimatorSet();appear.playTogether(ObjectAnimator.ofFloat(null,"alpha",0f,1f),ObjectAnimator.ofFloat(null,"translationY",-dp(10),0f));transition.setAnimator(LayoutTransition.APPEARING,appear);
             AnimatorSet disappear=new AnimatorSet();disappear.playTogether(ObjectAnimator.ofFloat(null,"alpha",1f,0f),ObjectAnimator.ofFloat(null,"translationY",0f,dp(32)));transition.setAnimator(LayoutTransition.DISAPPEARING,disappear);transition.setDuration(220);rows.setLayoutTransition(transition);
             scroll.addView(rows);panel.addView(scroll,new LinearLayout.LayoutParams(-1,-2));panelParams=params(Math.min(dp(205),screenWidth()-dp(70)));
             panelParams.x=Math.max(0,Math.min(onLeft()?fabParams.x+dp(54):fabParams.x-panelParams.width-dp(6),screenWidth()-panelParams.width));panelParams.y=fabParams.y;
-            try{wm.addView(panel,panelParams);}catch(SecurityException | WindowManager.BadTokenException e){panel=null;rows=null;return;}
+            try{panel.setAlpha(0);panel.setTranslationX(onLeft()?-dp(45):dp(45));wm.addView(panel,panelParams);panel.animate().alpha(1).translationX(0).setDuration(SLIDE_MS).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();}catch(SecurityException | WindowManager.BadTokenException e){panel=null;rows=null;return;}
         }
         List<FloatingJobs.Item> desired=model.mode==FloatingJobs.Mode.PREVIEW?model.items.subList(0,Math.min(1,model.items.size())):model.items;
         Set<String> ids=new HashSet<>();for(var item:desired)ids.add(item.id);
@@ -96,21 +100,34 @@ final class FloatingJobView {
         }else for(int i=0;i<desired.size();i++){
             FloatingJobs.Item item=desired.get(i);View existing=rows.findViewWithTag(item.id);
             if(existing!=null){int index=rows.indexOfChild(existing);if(index!=i){rows.removeView(existing);rows.addView(existing,i);}bind((LinearLayout)existing,item);}
-            else {LinearLayout row=new LinearLayout(context);row.setOrientation(LinearLayout.VERTICAL);row.setTag(item.id);row.setPadding(dp(5),dp(5),dp(5),dp(5));row.setBackground(background(0x19FFFFFF,7));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(4);rows.addView(row,i,lp);bind(row,item);}
+            else {LinearLayout row=new LinearLayout(context);row.setOrientation(LinearLayout.VERTICAL);row.setTag(item.id);row.setPadding(dp(5),dp(5),dp(5),dp(5));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,rowHeight());lp.bottomMargin=dp(4);rows.addView(row,i,lp);bind(row,item);}
         }
         rows.post(this::positionPanel);
     }
     private void bind(LinearLayout row,FloatingJobs.Item item){
-        row.removeAllViews();LinearLayout route=new LinearLayout(context);route.setGravity(Gravity.CENTER_VERTICAL);
+        row.removeAllViews();row.setGravity(Gravity.CENTER_VERTICAL);row.setBackground(background(AppTheme.jobColor(context,item.job),7));LinearLayout route=new LinearLayout(context);route.setGravity(Gravity.CENTER_VERTICAL);
         String title=item.job==null?item.title:item.job.origin()+" → "+item.job.destination();
         TextView path=text(title,11,true);path.setMaxLines(2);path.setEllipsize(android.text.TextUtils.TruncateAt.END);route.addView(path,new LinearLayout.LayoutParams(0,-2,1));
-        if(item.matches){TextView mark=text("✓",15,true);mark.setTextColor(0xFF9CFFC3);mark.setContentDescription("ตรงเงื่อนไข");route.addView(mark);}row.addView(route);
+        if(item.matches){TextView mark=text("✓",28,true);mark.setTextColor(0xFF9CFFC3);mark.setContentDescription("ตรงเงื่อนไข");route.addView(mark);}row.addView(route);
         TextView type=text(item.job==null?item.text:item.job.type(),10,true);type.setMaxLines(2);type.setEllipsize(android.text.TextUtils.TruncateAt.END);row.addView(type);
         if(item.job!=null)row.addView(text("฿"+item.job.fare()+" + ฿"+item.job.tip(),11,true));
         row.setAlpha(item.available?1f:.55f);row.setContentDescription(title+(item.available?" แตะเปิดงาน":" แจ้งเตือนหมดอายุ"));
         row.setOnClickListener(v->{if(item.available)open.accept(item);else Toast.makeText(context,"แจ้งเตือนนี้ไม่อยู่แล้ว",Toast.LENGTH_SHORT).show();});
     }
-    private void positionPanel(){if(panel==null || fab==null)return;panelParams.x=onLeft()?fabParams.x+dp(54):fabParams.x-panelParams.width-dp(6);panelParams.x=Math.max(0,Math.min(panelParams.x,screenWidth()-panelParams.width));int limit=screenHeight()-dp(100);panel.measure(View.MeasureSpec.makeMeasureSpec(panelParams.width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(limit,View.MeasureSpec.AT_MOST));panelParams.height=Math.min(panel.getMeasuredHeight(),limit);panelParams.y=Math.max(0,Math.min(fabParams.y,screenHeight()-panelParams.height-dp(70)));try{wm.updateViewLayout(panel,panelParams);}catch(IllegalArgumentException | SecurityException e){removePanel();}}
-    private void removePanel(){if(panel!=null){try{wm.removeViewImmediate(panel);}catch(IllegalArgumentException ignored){}panel=null;rows=null;}}
+    private void positionPanel(){
+        if(panel==null || fab==null)return;
+        panelParams.x=onLeft()?fabParams.x+dp(54):fabParams.x-panelParams.width-dp(6);
+        panelParams.x=Math.max(0,Math.min(panelParams.x,screenWidth()-panelParams.width));
+        int available=screenHeight()-dp(110);
+        int count=rows.getChildCount();
+        int content=count==0?rowHeight():count*(rowHeight()+dp(4));
+        int viewport=model.mode==FloatingJobs.Mode.PREVIEW?rowHeight()+dp(4):Math.min(content,Math.round((rowHeight()+dp(4))*3.5f));
+        scroll.getLayoutParams().height=Math.max(1,Math.min(viewport,available-dp(10)));
+        panelParams.height=scroll.getLayoutParams().height+dp(10);
+        panelParams.y=Math.max(0,Math.min(fabParams.y,screenHeight()-panelParams.height-dp(70)));
+        try{wm.updateViewLayout(panel,panelParams);}catch(IllegalArgumentException | SecurityException e){removePanel();}
+    }
+    private void closePanel(){if(panel==null||closing)return;closing=true;panel.animate().cancel();panel.animate().alpha(0).translationX(onLeft()?-dp(45):dp(45)).setDuration(SLIDE_MS).withEndAction(()->{if(model.mode==FloatingJobs.Mode.COLLAPSED)removePanel();}).start();}
+    private void removePanel(){if(panel!=null){panel.animate().cancel();try{wm.removeViewImmediate(panel);}catch(IllegalArgumentException ignored){}panel=null;rows=null;scroll=null;}closing=false;}
     void hide(){handler.removeCallbacks(timeout);model.collapse();removePanel();if(fab!=null){try{wm.removeViewImmediate(fab);}catch(IllegalArgumentException ignored){}fab=null;}}
 }

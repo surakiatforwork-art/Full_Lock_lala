@@ -10,7 +10,7 @@ import java.util.*;
 /** Emulator-only checks. No tests or synthetic notifications are shipped in the app APK. */
 public class OverlayChecks extends Instrumentation {
     private int checks;
-    private boolean preview;
+    private boolean preview,extraOnly;
     private FloatingJobView view;
     private Map<String,?> saved;
     private BroadcastReceiver probe;
@@ -19,7 +19,7 @@ public class OverlayChecks extends Instrumentation {
     private Object field(Object target,String name){try{Field f=target.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(target);}catch(Exception e){throw new RuntimeException(e);}}
     private JobListener service(){try{Field f=JobListener.class.getDeclaredField("instance");f.setAccessible(true);return (JobListener)f.get(null);}catch(Exception e){throw new RuntimeException(e);}}
     private void main(Runnable work){Throwable[] failure={null};runOnMainSync(()->{try{work.run();}catch(Throwable e){failure[0]=e;}});if(failure[0]!=null)throw new RuntimeException(failure[0]);}
-    private FloatingJobs.Item item(int n){String title="[ขนส่งสินค้า] ต้นทาง "+n+" > ปลายทาง "+n;String text="ขนส่งทันที ฿276.00 + ฿10.00 รับงานขนส่ง!";return new FloatingJobs.Item("key"+n,n,title,text,JobParser.parse(title,text),n%2==0,true);}
+    private FloatingJobs.Item item(int n){String title="[ขนส่งสินค้า] ต้นทาง "+n+" > ปลายทาง "+n;String text=(n%3==0?"งานล่วงหน้า":"ขนส่งทันที")+" ฿276.00 + ฿10.00 รับงานขนส่ง!";return new FloatingJobs.Item("key"+n,n,title,text,JobParser.parse(title,text),n%2==0,true);}
     private LinearLayout rows(){return (LinearLayout)field(view,"rows");}
     private void tap(float x,float y){long now=SystemClock.uptimeMillis();MotionEvent down=MotionEvent.obtain(now,now,0,x,y,0),up=MotionEvent.obtain(now,now+60,1,x,y,0);getUiAutomation().injectInputEvent(down,true);getUiAutomation().injectInputEvent(up,true);down.recycle();up.recycle();waitForIdleSync();}
     private void tap(View target){int[] point=new int[2];main(()->{target.getLocationOnScreen(point);point[0]+=target.getWidth()/2;point[1]+=target.getHeight()/2;});tap(point[0],point[1]);}
@@ -75,7 +75,7 @@ public class OverlayChecks extends Instrumentation {
     private void shell(String command)throws Exception {
         try(android.os.ParcelFileDescriptor fd=getUiAutomation().executeShellCommand(command);java.io.InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){byte[] buffer=new byte[1024];while(input.read(buffer)!=-1){} }
     }
-    @Override public void onCreate(Bundle args){super.onCreate(args);preview=args!=null&&"true".equals(args.getString("preview"));start();}
+    @Override public void onCreate(Bundle args){super.onCreate(args);preview=args!=null&&"true".equals(args.getString("preview"));extraOnly=args!=null&&"true".equals(args.getString("extraOnly"));start();}
     @Override public void onStart(){
         Bundle result=new Bundle();int code=Activity.RESULT_OK;List<String> selected=new ArrayList<>();
         try{
@@ -92,8 +92,9 @@ public class OverlayChecks extends Instrumentation {
                 check(view.model.unread==5,"five unread");check(rows().getChildCount()==1,"automatic preview one item");
                 check(view.model.mode==FloatingJobs.Mode.PREVIEW,"preview mode");
             });
+            if(!extraOnly){
             Thread.sleep(3400);
-            main(()->{check(view.model.mode==FloatingJobs.Mode.COLLAPSED,"preview closes after 3 seconds");check(view.model.unread==5,"preview does not mark read");view.toggle();check(view.model.unread==0,"opening FAB marks read");check(rows().getChildCount()==5,"pinned list five items");view.offer(item(6));check(view.model.mode==FloatingJobs.Mode.PINNED,"new item preserves pinned");check(view.model.items.get(0).id.equals(item(6).id),"newest first");check(rows().getChildCount()==5,"oldest removed");check(view.model.unread==0,"visible new item read");
+            main(()->{check(view.model.mode==FloatingJobs.Mode.COLLAPSED,"preview closes after 3 seconds");check(view.model.unread==5,"preview does not mark read");view.toggle();check(view.model.unread==0,"opening FAB marks read");check(rows().getChildCount()==5,"pinned list five items");view.offer(item(6));check(view.model.mode==FloatingJobs.Mode.PINNED,"new item preserves pinned");check(view.model.items.get(0).id.equals(item(6).id),"newest first");check(rows().getChildCount()==6,"six jobs retained");check(view.model.unread==0,"visible new item read");
                 LinearLayout row=(LinearLayout)rows().getChildAt(0);LinearLayout route=(LinearLayout)row.getChildAt(0);
                 check(((TextView)route.getChildAt(0)).getTypeface().isBold(),"route bold");check(((TextView)row.getChildAt(1)).getTypeface().isBold(),"type bold");check(((TextView)row.getChildAt(2)).getTypeface().isBold(),"fare tip bold");check(route.getChildCount()==2&&((TextView)route.getChildAt(1)).getText().toString().equals("✓"),"matching checkmark");check(row.getChildCount()==3,"no rejection reason in panel");
             });
@@ -113,6 +114,16 @@ public class OverlayChecks extends Instrumentation {
             capture("fulllock-fab-right.png");
             main(()->{view.toggle();view.offer(item(7));check(view.model.unread==1,"new unread after closing");view.hide();check(!view.visible(),"hide removes windows");check(view.model.unread==1,"hide retains unread");view.show();check(view.model.mode==FloatingJobs.Mode.COLLAPSED,"show returns compact");});
             capture("fulllock-fab-counter.png");
+            }
+            main(()->{for(int i=11;i<=21;i++)view.offer(item(i));view.toggle();check(rows().getChildCount()==10,"ten retained rows");});
+            waitForIdleSync();Thread.sleep(600);
+            main(()->{LinearLayout panel=(LinearLayout)field(view,"panel");ScrollView scroll=(ScrollView)panel.getChildAt(0);check(panel.getChildCount()==1,"no header or close button");check(((android.graphics.drawable.ColorDrawable)panel.getBackground()).getColor()==android.graphics.Color.TRANSPARENT,"transparent panel");float ratio=scroll.getHeight()/(float)(rows().getChildAt(0).getHeight()+Math.round(4*getTargetContext().getResources().getDisplayMetrics().density));check(ratio>3.4f&&ratio<3.6f,"3.5-row viewport");LinearLayout first=(LinearLayout)rows().getChildAt(0);check(((android.graphics.drawable.GradientDrawable)first.getBackground()).getColor().getDefaultColor()==AppTheme.jobColor(getTargetContext(),item(21).job),"advance color complementary");LinearLayout route=(LinearLayout)((LinearLayout)rows().getChildAt(1)).getChildAt(0);check(((TextView)route.getChildAt(1)).getTextSize()/getTargetContext().getResources().getDisplayMetrics().scaledDensity>=28,"large matching mark");scroll.fullScroll(View.FOCUS_DOWN);});
+            waitForIdleSync();Thread.sleep(500);main(()->{check(((ScrollView)field(view,"scroll")).getScrollY()>0,"ten rows scroll");view.offer(item(22));check(((ScrollView)field(view,"scroll")).getScrollY()==0,"new job scrolls to newest");});
+            capture("fulllock-ten-jobs.png");
+            main(()->{view.toggle();check(field(view,"panel")!=null,"collapse retains panel during transition");});Thread.sleep(650);
+            main(()->{check(field(view,"panel")==null,"collapse removes panel after transition");view.toggle();view.toggle();view.toggle();});Thread.sleep(650);
+            main(()->check(view.model.mode==FloatingJobs.Mode.PINNED&&field(view,"panel")!=null,"rapid reverse preserves expanded panel"));
+            if(!extraOnly){
             main(()->{
                 view.hide();MainActivity.foreground=true;Store.prefs(getTargetContext()).edit().putBoolean("enabled",false).putBoolean("floatingEnabled",true).apply();JobListener.refreshFloating();check(!JobListener.floatingVisible(),"hidden in Full Lock");
                 MainActivity.foreground=false;JobListener.refreshFloating();check(JobListener.floatingVisible(),"shown outside Full Lock");
@@ -120,7 +131,9 @@ public class OverlayChecks extends Instrumentation {
                 Store.prefs(getTargetContext()).edit().putBoolean("enabled",false).apply();check(JobListener.floatingVisible(),"auto-off keeps FAB");
             });
             monitorChecks();
-            int uiCount=new UiChecks(this,preview).run(); result.putString("stream","OverlayChecks: "+checks+" checks passed\nUiChecks: "+uiCount+" checks passed\n");
+            int historyCount=new HistoryChecks(this).run();
+            int uiCount=new UiChecks(this,preview).run(); result.putString("stream","OverlayChecks: "+checks+" checks passed\nHistoryChecks: "+historyCount+" checks passed\nUiChecks: "+uiCount+" checks passed\n");
+            }else result.putString("stream","PanelChecks: "+checks+" checks passed\n");
         }catch(Throwable e){code=Activity.RESULT_CANCELED;result.putString("stream","OverlayChecks failed: "+e+"\n");}
         finally{main(()->{if(view!=null)view.hide();if(probe!=null)getTargetContext().unregisterReceiver(probe);getTargetContext().getSystemService(NotificationManager.class).cancel(41);MainActivity.foreground=false;if(saved!=null){var edit=Store.prefs(getTargetContext()).edit().clear();for(var entry:saved.entrySet()){Object v=entry.getValue();String k=entry.getKey();if(v instanceof String)edit.putString(k,(String)v);else if(v instanceof Boolean)edit.putBoolean(k,(Boolean)v);else if(v instanceof Integer)edit.putInt(k,(Integer)v);else if(v instanceof Long)edit.putLong(k,(Long)v);else if(v instanceof Float)edit.putFloat(k,(Float)v);}edit.apply();JobListener.refreshFloating();}});}
         finish(code,result);
