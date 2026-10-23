@@ -27,10 +27,10 @@ const duplicate=catalog.areas.filter(a=>a.name==='บ้านใหม่');ass
 assert.throws(()=>routeSettings({...buckets,origins:new Set(north.map(a=>a.id))},ids),/มากเกินขนาด/);
 const bytes=Buffer.from(await encodeProfile('แผนที่ประเทศไทย',{...settings,serviceMask:2}));const raw=inflateSync(bytes.subarray(21));assert.equal(crc32(raw),bytes.readUInt32BE(17));
 await mkdir('app/build/profile-fixtures',{recursive:true});await writeFile('app/build/profile-fixtures/website.flp',bytes);
-const html=await readFile('index.html','utf8');assert.ok(!html.includes('github.com/surakiatforwork-art'));assert.equal([...html.matchAll(/href="web\/downloads\/FullLock.apk" download="FullLock.apk"/g)].length,4);
+const html=await readFile('index.html','utf8');assert.ok(!html.includes('github.com/surakiatforwork-art'));assert.equal([...html.matchAll(/href="web\/downloads\/FullLock.apk" download="FullLock.apk"/g)].length,3);
 // Every local asset linked by the root entry point is present before publication.
 for(const [,path] of html.matchAll(/(?:src|href)="((?:web|tools)\/[^"#]+)"/g))await readFile(path);
 const motion=await readFile('web/motion.mjs','utf8'),polish=await readFile('web/polish.css','utf8');
 assert.ok(motion.includes('prefers-reduced-motion: reduce'));assert.ok(polish.includes('@media(prefers-reduced-motion:reduce)'));
-assert.ok(html.includes('class="mobile-dock"'));assert.ok(html.includes('aria-labelledby="dialog-title"'));
+assert.ok(html.includes('class="mobile-dock"'));const profile=await readFile('profile.html','utf8');assert.ok(profile.includes('aria-labelledby="dialog-title"'));assert.ok(!html.includes('id="builder"'));assert.ok(!profile.includes('class="hero"'));assert.ok(html.includes('href="profile.html"'));assert.ok(profile.includes('href="profile.html" aria-current="page"'));assert.ok(html.includes('href="./" aria-current="page"'));assert.ok(profile.includes('web/app.mjs'));assert.ok(!html.includes('web/app.mjs'));
 console.log(`Website checks passed: ${geometries} boundaries; scope, collisions, exclusions, size guard, FLP checksum, stable download URL`);

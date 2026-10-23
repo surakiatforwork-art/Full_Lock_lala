@@ -20,10 +20,3 @@ document.addEventListener('pointerdown', event => {
   ripple.style.left = `${event.clientX - rect.left}px`; ripple.style.top = `${event.clientY - rect.top}px`;
   button.append(ripple); ripple.addEventListener('animationend', () => ripple.remove(), {once: true});
 });
-const dock = document.querySelector('.mobile-dock');
-if (dock && 'IntersectionObserver' in window) {
-  const observer = new IntersectionObserver(entries => {
-    for (const entry of entries) if (entry.target.id === 'builder') dock.classList.toggle('at-builder', entry.isIntersecting);
-  }, {rootMargin: '-10% 0px -30% 0px'});
-  observer.observe(document.getElementById('builder'));
-}

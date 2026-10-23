@@ -5,6 +5,19 @@ const make = (tag, text, className) => { const el=document.createElement(tag); i
 let catalog, byId, map, polygons, resultLimit=60, generation=0, toastTimer, downloadUrl;
 const stage=new Set(), buckets=Object.fromEntries(Object.keys(bucketLabels).map(key=>[key,new Set()])), cache=new Map();
 const bucketLimits=Object.fromEntries(Object.keys(bucketLabels).map(key=>[key,60]));
+// Keep the in-progress profile when switching between the two pages in this tab.
+let draft;try{draft=JSON.parse(sessionStorage.getItem('fulllock-profile-draft')||'null');if(draft?.version!==1||!Array.isArray(draft.form)||!Array.isArray(draft.stage)||!draft.buckets||Object.values(draft.buckets).some(value=>!Array.isArray(value)))draft=null;}catch{}
+function formInputs(){return [...document.querySelectorAll('#profile-form input, #profile-form select')];}
+function inputKey(input){return input.id||input.name+':'+input.value;}
+function saveDraft(){try{sessionStorage.setItem('fulllock-profile-draft',JSON.stringify({version:1,form:formInputs().map(input=>({key:inputKey(input),value:input.value,checked:input.checked})),scope:catalog?scope():draft?.scope||scope(),stage:catalog?[...stage]:draft?.stage||[],buckets:catalog?Object.fromEntries(Object.entries(buckets).map(([key,ids])=>[key,[...ids]])):draft?.buckets||{}}));}catch{}}
+function restoreDraft(){if(!draft)return;
+ for(const input of formInputs()){const value=draft.form?.find(x=>x.key===inputKey(input));if(!value)continue;if(input.type==='radio'||input.type==='checkbox')input.checked=value.checked===true;else if(typeof value.value==='string')input.value=value.value;}
+ const setSelect=(id,value)=>{if([...$(id).options].some(o=>o.value===value))$(id).value=value;};setSelect('zone',draft.scope?.zone);provinces();setSelect('province',draft.scope?.province);districts();setSelect('district',draft.scope?.district);if(typeof draft.scope?.search==='string')$('search').value=draft.scope.search;
+ for(const key of Object.keys(buckets))for(const id of draft.buckets?.[key]||[])if(byId.has(id))buckets[key].add(id);
+ for(const id of draft.stage||[])if(byId.has(id))stage.add(id);$('formula').onchange();$('price').onchange();
+}
+addEventListener('pagehide',saveDraft);
+
 document.querySelectorAll('[data-target]').forEach(button=>button.disabled=true);
 function toast(message) { $('toast').textContent=message; $('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),6000); }
 function scope() {return {zone:$('zone').value,province:$('province').value,district:$('district').value,search:$('search').value};}
@@ -68,7 +81,7 @@ async function init(){
  if(globalThis.L){map=L.map('map',{preferCanvas:true,scrollWheelZoom:false}).setView([13.7,100.55],9);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);map.attributionControl.addAttribution('<a href="https://bangkok.traffy.in.th">Traffy Fondue</a> · GeoThai · mapthai');
  polygons=L.geoJSON(null,{style,onEachFeature(feature,layer){const area=byId.get(feature.properties.id);const tooltip=make('span',`${area.name} · ${area.context}`);layer.bindTooltip(tooltip);layer.on('click',()=>{stage.has(area.id)?stage.delete(area.id):stage.add(area.id);render();});}}).addTo(map);
  }else $('map').append(make('p','แผนที่ไม่พร้อมใช้งาน เลือกจากรายชื่อด้านล่างได้'));
- provinces();render();await showScope();
+ provinces();restoreDraft();render();await showScope();
  $('zone').onchange=()=>{provinces();showScope();};$('province').onchange=()=>{districts();showScope();};$('district').onchange=showScope;
  let searchTimer;$('search').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(showScope,300);};
  $('select-scope').onclick=()=>{scoped().forEach(a=>stage.add(a.id));render();};$('clear-stage').onclick=()=>{stage.clear();render();};$('more').onclick=()=>{resultLimit+=100;renderResults();};
