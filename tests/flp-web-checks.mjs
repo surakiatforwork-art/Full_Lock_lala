@@ -14,8 +14,9 @@ for (let i = 0; i < raw.readUInt16BE(0); i++) {
   decoded[id === 1 ? 'name' : fields[id - 10][0]] = value; pos += len;
 }
 check(decoded.name === 'กรุงเทพ / กลางคืน');check(decoded.origins === 'บางพูด,คลองสาม');check(decoded.themeColor === (0xff2563eb | 0));check(decoded.invertText === true);check(decoded.serviceMask === 2);check(bytes[8] === 2);
-const web = await encodeProfile('จากเว็บไซต์', { origins: 'บางพูด,คลองสาม', excludedDestinations: 'คลองสามประเวศ', serviceMask: 2, type: 2 });
+const web = await encodeProfile('จากเว็บไซต์', { origins: 'บางพูด,คลองสาม', excludedDestinations: 'คลองสามประเวศ', serviceMask: 2, type: 2, bulk: true });
 await mkdir('app/build/profile-fixtures', { recursive: true });await writeFile('app/build/profile-fixtures/web.flp', web);
+const retiredRaw = inflateSync(web.subarray(21));let retiredPos=2;for(let i=0;i<retiredRaw.readUInt16BE(0);i++){const id=retiredRaw[retiredPos],len=retiredRaw.readUInt32BE(retiredPos+2);if(id===24)check(retiredRaw[retiredPos+6]===0);retiredPos+=6+len;}
 check(web.length < 1024);check(await encodeProfile('ทดสอบ') instanceof Uint8Array);
 await assert.rejects(() => encodeProfile('bad', { enabled: true }));checks++;
 await assert.rejects(() => encodeProfile('bad', { min: '1000', max: '100' }));checks++;

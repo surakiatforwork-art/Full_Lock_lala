@@ -22,6 +22,9 @@ final class FilterChecks {
         p.edit().putInt("serviceMask",2).apply();check(Store.rejection(c,passenger)==null,"passenger selection accepts passenger");check("ประเภทงานไม่ตรง".equals(Store.rejection(c,job("A","B"))),"passenger only rejects goods");
         p.edit().putInt("serviceMask",3).apply();check("ประเภทงานไม่ตรง".equals(Store.rejection(c,passenger))&&Store.rejection(c,job("A","B"))==null,"legacy both-services value defaults to goods");
         p.edit().putInt("type",2).apply();check("ประเภทงานไม่ตรง".equals(Store.rejection(c,passenger)),"time still applies to passenger");
-        p.edit().putInt("type",0).putInt("serviceMask",1).putBoolean("price",true).apply();return count;
+        p.edit().putInt("type",0).putInt("serviceMask",1).putBoolean("bulk",true).putBoolean("price",false).apply();
+        for(int fare:new int[]{475,600,650,735,900,1000,1150})check(Store.rejection(c,JobParser.parse("[ขนส่งสินค้า] A > B","ขนส่งทันที ฿"+fare+".00 รับงานขนส่ง!"))==null,"retired bulk filter accepts "+fare);
+        p.edit().putBoolean("price",true).putString("min","100").putString("max","200").apply();
+        check("ราคาสูงไป".equals(Store.rejection(c,JobParser.parse("[ขนส่งสินค้า] A > B","ขนส่งทันที ฿475.00 รับงานขนส่ง!"))),"ordinary price filter remains active");return count;
     }
 }

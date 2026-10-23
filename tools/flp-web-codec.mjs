@@ -20,6 +20,8 @@ export async function encodeProfile(name, settings = {}) {
     if (typeof values[key] !== typeof fallback || (typeof fallback === 'number' && (!Number.isInteger(values[key]) || values[key] < -2147483648 || values[key] > 2147483647))) throw Error('Wrong field type');
     if (typeof values[key] === 'string' && utf8.encode(values[key]).length > 16384) throw Error('Field too large');
   }
+  // Keep the retired field at ID 24 for older FLP readers.
+  values.bulk = false;
   const money = value => { if (!/^[0-9]{1,10}(\.[0-9]{1,2})?$/.test(value)) throw Error('Invalid price'); const [whole, fraction = ''] = value.split('.'); return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0')); };
   if (money(values.min) > money(values.max)) throw Error('Invalid price range');
   if (values.formula < 0 || values.formula > 3 || values.fee < 0 || values.fee > 100 || values.type < 0 || values.type > 2 || values.serviceMask < 1 || values.serviceMask > 2 || (values.themeColor >>> 24) !== 255) throw Error('Invalid setting range');

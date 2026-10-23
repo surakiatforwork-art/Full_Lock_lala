@@ -22,7 +22,7 @@ public final class ProfileFile {
     }
     public static final class Data {
         public final String name;public final LinkedHashMap<String,Object> values;
-        public Data(String name,Map<String,Object> values){this.name=name(name);this.values=new LinkedHashMap<>(DEFAULTS);this.values.putAll(values);if(Integer.valueOf(3).equals(this.values.get("serviceMask")))this.values.put("serviceMask",1);validate(this.values);}
+        public Data(String name,Map<String,Object> values){this.name=name(name);this.values=new LinkedHashMap<>(DEFAULTS);this.values.putAll(values);if(Integer.valueOf(3).equals(this.values.get("serviceMask")))this.values.put("serviceMask",1);validate(this.values);this.values.put("bulk",false);}
     }
     public static String name(String text){String value=Normalizer.normalize(text.trim(),Normalizer.Form.NFC);if(value.isEmpty()||value.codePointCount(0,value.length())>60||value.codePoints().anyMatch(Character::isISOControl))throw new IllegalArgumentException("ชื่อโปรไฟล์ไม่ถูกต้อง");return value;}
     private static void validate(Map<String,Object> values){
@@ -37,7 +37,7 @@ public final class ProfileFile {
     private static void portable(Map<String,Object> values){for(Object value:values.values())if(value instanceof String&&((String)value).getBytes(StandardCharsets.UTF_8).length>16384)throw new IllegalArgumentException("รายชื่อพื้นที่ยาวเกินไป");for(String key:new String[]{"min","max"})if(!((String)values.get(key)).matches("[0-9]{1,10}(\\.[0-9]{1,2})?"))throw new IllegalArgumentException("ช่วงราคายาวเกินไป");}
     public static byte[] encode(Data data)throws IOException {
         validate(data.values);portable(data.values);
-        ByteArrayOutputStream rawBuffer=new ByteArrayOutputStream();DataOutputStream raw=new DataOutputStream(rawBuffer);raw.writeShort(DEFAULTS.size()+1);record(raw,1,data.name);int id=10;for(String key:DEFAULTS.keySet())record(raw,id++,data.values.get(key));raw.flush();byte[] bytes=rawBuffer.toByteArray();if(bytes.length>MAX_RAW)throw new IOException("โปรไฟล์ใหญ่เกินไป");
+        ByteArrayOutputStream rawBuffer=new ByteArrayOutputStream();DataOutputStream raw=new DataOutputStream(rawBuffer);raw.writeShort(DEFAULTS.size()+1);record(raw,1,data.name);int id=10;for(String key:DEFAULTS.keySet())record(raw,id++,(key.equals("bulk")?false:data.values.get(key)));raw.flush();byte[] bytes=rawBuffer.toByteArray();if(bytes.length>MAX_RAW)throw new IOException("โปรไฟล์ใหญ่เกินไป");
         ByteArrayOutputStream compressed=new ByteArrayOutputStream();try(DeflaterOutputStream zip=new DeflaterOutputStream(compressed)){zip.write(bytes);}byte[] payload=compressed.toByteArray();CRC32 crc=new CRC32();crc.update(bytes);
         ByteArrayOutputStream file=new ByteArrayOutputStream();DataOutputStream out=new DataOutputStream(file);out.write(MAGIC);out.writeByte(2);out.writeInt(payload.length);out.writeInt(bytes.length);out.writeInt((int)crc.getValue());out.write(payload);return file.toByteArray();
     }

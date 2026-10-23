@@ -23,8 +23,6 @@ final class Store {
         boolean serviceMismatch=service==0||(p.getInt("serviceMask",1)==2?2:1)!=service;
         int type = p.getInt("type", 0);
         if (serviceMismatch || type == 1 && !job.type().equals("ขนส่งทันที") || type == 2 && !job.type().equals("งานล่วงหน้า")) reasons.add("ประเภทงานไม่ตรง");
-        if (p.getBoolean("bulk", false)) for (int amount : new int[]{475,600,650,900,735,1000,1150})
-            if (job.fare().compareTo(BigDecimal.valueOf(amount)) == 0) reasons.add("คาดว่าเป็นงานเหมา");
         return reasons.isEmpty()?null:String.join(" / ",reasons);
     }
     // Render previous versions' filter reasons concisely without modifying saved history.

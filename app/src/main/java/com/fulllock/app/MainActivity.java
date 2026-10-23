@@ -131,7 +131,7 @@ public class MainActivity extends Activity {
         TextView expand=label((unwantedExpanded?"▴ ":"▾ ")+"เส้นทางที่ไม่ต้องการ",15,accent,true);expand.setTag("excluded-toggle");pad(expand,0,13,0,13);excluded.addView(expand);
         LinearLayout blocked=column();blocked.setTag("excluded-settings");blocked.setVisibility(unwantedExpanded?View.VISIBLE:View.GONE);excluded.addView(blocked);expand.setOnClickListener(v->{unwantedExpanded=!unwantedExpanded;blocked.setVisibility(unwantedExpanded?View.VISIBLE:View.GONE);expand.setText((unwantedExpanded?"▴ ":"▾ ")+"เส้นทางที่ไม่ต้องการ");});
         blocked.addView(label("ข้ามพื้นที่เหล่านี้ แม้ตรงเส้นทางที่ต้องการ",12,muted,false));toggle(blocked,"ไม่รับต้นทาง",null,"excludeOriginOn",false);item(blocked,"○ ต้นทาง",areaValue("excludedOrigins"),()->area("ต้นทางที่ไม่ต้องการ","excludedOrigins"));line(blocked);toggle(blocked,"ไม่รับปลายทาง",null,"excludeDestOn",false);item(blocked,"● ปลายทาง",areaValue("excludedDestinations"),()->area("ปลายทางที่ไม่ต้องการ","excludedDestinations"));
-        c=card("03 / งาน","▣ ประเภทงาน");serviceChoice(c);line(c);jobChoices(c,"เวลา","type",new String[]{"ขนส่งทันที","งานล่วงหน้า"},true);line(c);toggle(c,"ไม่รับงานเหมา","ดูจากราคางานที่กำหนดไว้","bulk",false);
+        c=card("03 / งาน","▣ ประเภทงาน");serviceChoice(c);line(c);jobChoices(c,"เวลา","type",new String[]{"ขนส่งทันที","งานล่วงหน้า"},true);
         c=card(null,null);c.addView(label("ⓘ งานที่ตรงเงื่อนไขจะแสดง ✓",13,ink,true));space(c,5);c.addView(label("อ่านงานได้แม้ยังไม่เริ่มอัตโนมัติ\nค่าธรรมเนียมหักเฉพาะราคางาน ไม่หักทิป",12,muted,false));
     }
     private String areaValue(String key){String value=p().getString(key,"");return value.isBlank()?"ยังไม่เลือก":value;}

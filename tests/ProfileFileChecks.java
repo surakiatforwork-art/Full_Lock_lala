@@ -14,6 +14,7 @@ public class ProfileFileChecks {
         Map<String,Object> values=new LinkedHashMap<>(ProfileFile.DEFAULTS);values.put("origins","บางพูด,คลองสาม");values.put("excludedDestinations","คลองสามประเวศ");values.put("themeColor",0xFF2563EB);values.put("invertText",true);values.put("serviceMask",2);
         ProfileFile.Data profile=new ProfileFile.Data("กรุงเทพ / กลางคืน",values);byte[] bytes=ProfileFile.encode(profile);ProfileFile.Data decoded=ProfileFile.decode(bytes);
         check(new ProfileFile.Data("เก่า",Map.of("serviceMask",3)).values.get("serviceMask").equals(1),"old both-services profile migrates to goods");
+        check(new ProfileFile.Data("legacy",Map.of("bulk",true)).values.get("bulk").equals(false),"retired bulk setting ignored");
         check(decoded.name.equals(profile.name),"Thai name round trip");check(decoded.values.equals(values),"all fields round trip");check(bytes.length<1024,"compact preset");
         check(ProfileFile.decode(ProfileFile.encode(new ProfileFile.Data("ย่อ",Map.of()))).values.equals(ProfileFile.DEFAULTS),"omitted defaults");
         reject(()->new ProfileFile.Data(" ",values),"empty name");reject(()->new ProfileFile.Data("a".repeat(61),values),"long name");reject(()->new ProfileFile.Data("bad\nname",values),"control name");
