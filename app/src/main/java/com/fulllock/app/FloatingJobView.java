@@ -27,7 +27,8 @@ final class FloatingJobView {
     private WindowManager.LayoutParams fabParams,panelParams;
     private float downX,downY;
     private int startX,startY;
-    private boolean dragged;
+    private boolean dragged,temporarilyHidden,overDismiss;
+    private TextView dismissTarget;
     private final Runnable timeout=()->{model.expire();render();};
     private final class OutsideFab extends TextView {
         private final Bitmap mascot;
@@ -37,7 +38,9 @@ final class FloatingJobView {
         OutsideFab(){super(FloatingJobView.this.context);BitmapFactory.Options options=new BitmapFactory.Options();options.inSampleSize=4;mascot=BitmapFactory.decodeResource(getResources(),R.drawable.floating_phantom,options);paint.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));}
         @Override protected void onDraw(Canvas canvas){
             float scale=Math.min(getWidth()/(float)mascot.getWidth(),getHeight()/(float)mascot.getHeight()),width=mascot.getWidth()*scale,height=mascot.getHeight()*scale,left=(getWidth()-width)/2,top=(getHeight()-height)/2;
-            paint.setStyle(Paint.Style.FILL);paint.setColor(Color.WHITE);imageBounds.set(left,top,left+width,top+height);canvas.drawBitmap(mascot,null,imageBounds,paint);
+            paint.setStyle(Paint.Style.FILL);paint.setColor(AppTheme.accent(context));
+            canvas.drawRoundRect(new RectF(getWidth()*.12f,getHeight()*.38f,getWidth()*.96f,getHeight()*.96f),dp(18),dp(18),paint);
+            paint.setColor(Color.WHITE);imageBounds.set(left,top,left+width,top+height);canvas.drawBitmap(mascot,null,imageBounds,paint);
             String count=getText().toString();paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(dp(19));float maximum=width*.24f;if(paint.measureText(count)>maximum)paint.setTextSize(paint.getTextSize()*maximum/paint.measureText(count));
             float x=left+width*.775f,y=top+height*.785f;paint.getFontMetrics(counterMetrics);float baseline=y-(counterMetrics.ascent+counterMetrics.descent)/2;
             canvas.save();canvas.rotate(-8,x,y);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(dp(1.4f));paint.setColor(0xFF7C2B0B);canvas.drawText(count,x,baseline,paint);paint.setStyle(Paint.Style.FILL);paint.setColor(0xFFFFFAEF);canvas.drawText(count,x,baseline,paint);canvas.restore();
@@ -55,11 +58,11 @@ final class FloatingJobView {
     private int dp(float n){return (int)(n*context.getResources().getDisplayMetrics().density+.5f);}
     private GradientDrawable background(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
     private TextView text(String value,int size,boolean bold){TextView t=new TextView(context);t.setText(value);t.setTextSize(size);t.setTextColor(AppTheme.onAccent(context));if(bold)t.setTypeface(null,Typeface.BOLD);return t;}
-    void refreshTheme(){if(fab==null)return;fab.setTextColor(AppTheme.onAccent(context));fab.setBackground(background(AppTheme.accent(context),24));render();}
+    void refreshTheme(){if(fab==null)return;fab.setTextColor(AppTheme.onAccent(context));fab.invalidate();render();}
     boolean visible(){return fab!=null;}
     void show(){
-        if(fab!=null || !Settings.canDrawOverlays(context))return;
-        fab=new OutsideFab();fab.setTextSize(17);fab.setTextColor(AppTheme.onAccent(context));fab.setTypeface(null,Typeface.BOLD);fab.setGravity(Gravity.CENTER);fab.setBackground(background(AppTheme.accent(context),24));fab.setElevation(dp(6));
+        if(temporarilyHidden || fab!=null || !Settings.canDrawOverlays(context))return;
+        fab=new OutsideFab();fab.setTextSize(17);fab.setTextColor(AppTheme.onAccent(context));fab.setTypeface(null,Typeface.BOLD);fab.setGravity(Gravity.CENTER);fab.setBackgroundColor(Color.TRANSPARENT);
         fabParams=params(dp(80));fabParams.height=dp(56);
         fabParams.x=Store.prefs(context).getInt("floatX",dp(8));fabParams.y=Store.prefs(context).getInt("floatY",dp(180));clampFab();
         fab.setOnClickListener(v->toggle());
@@ -69,15 +72,34 @@ final class FloatingJobView {
                 case MotionEvent.ACTION_MOVE:
                     float dx=e.getRawX()-downX,dy=e.getRawY()-downY;
                     if(Math.hypot(dx,dy)>ViewConfiguration.get(context).getScaledTouchSlop())dragged=true;
-                    if(dragged){fabParams.x=startX+Math.round(dx);fabParams.y=startY+Math.round(dy);clampFab();updateFab();positionPanel();}return true;
+                    if(dragged){if(dismissTarget==null){collapse();removePanel();showDismissTarget();}fabParams.x=startX+Math.round(dx);fabParams.y=startY+Math.round(dy);clampFab();updateFab();updateDismissHover(e.getRawX(),e.getRawY());}return true;
                 case MotionEvent.ACTION_UP:
-                    if(!dragged)v.performClick();else{fabParams.x=onLeft()?dp(8):screenWidth()-fabParams.width-dp(8);clampFab();updateFab();positionPanel();Store.prefs(context).edit().putInt("floatX",fabParams.x).putInt("floatY",fabParams.y).apply();}return true;
-                case MotionEvent.ACTION_CANCEL:return true;
+                    boolean dismiss=dragged&&dismissHit(e.getRawX(),e.getRawY());removeDismissTarget();
+                    if(dismiss){temporarilyHidden=true;hide();}
+                    else if(!dragged)v.performClick();else dockFab();return true;
+                case MotionEvent.ACTION_CANCEL:
+                    removeDismissTarget();if(dragged){fabParams.x=startX;fabParams.y=startY;clampFab();updateFab();positionPanel();}dragged=false;return true;
                 default:return false;
             }
         });
         try{wm.addView(fab,fabParams);render();}catch(SecurityException | WindowManager.BadTokenException e){fab=null;}
     }
+    void restore(){temporarilyHidden=false;}
+    boolean temporarilyHidden(){return temporarilyHidden;}
+    private void dockFab(){fabParams.x=onLeft()?dp(8):screenWidth()-fabParams.width-dp(8);clampFab();updateFab();positionPanel();Store.prefs(context).edit().putInt("floatX",fabParams.x).putInt("floatY",fabParams.y).apply();}
+    private void showDismissTarget(){
+        TextView target=text("✕",30,true);target.setGravity(Gravity.CENTER);target.setContentDescription("ลากมาที่นี่เพื่อซ่อนปุ่มลอยชั่วคราว");target.setBackground(background(0xDD35383E,48));target.setTextColor(Color.WHITE);target.setElevation(dp(8));
+        WindowManager.LayoutParams layout=params(dp(88));layout.height=dp(88);layout.gravity=Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL;layout.y=dp(24);layout.flags=WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+        try{wm.addView(target,layout);dismissTarget=target;target.setAlpha(0);target.setScaleX(.7f);target.setScaleY(.7f);target.animate().alpha(1).scaleX(1).scaleY(1).setDuration(160).start();}catch(SecurityException|WindowManager.BadTokenException ignored){}
+    }
+    private boolean dismissHit(float x,float y){if(dismissTarget==null||dismissTarget.getWidth()==0)return false;int[] at=new int[2];dismissTarget.getLocationOnScreen(at);return Math.hypot(x-at[0]-dismissTarget.getWidth()/2f,y-at[1]-dismissTarget.getHeight()/2f)<=dp(64);}
+    private void updateDismissHover(float x,float y){
+        boolean inside=dismissHit(x,y);if(inside==overDismiss)return;overDismiss=inside;if(dismissTarget==null)return;
+        dismissTarget.setBackground(background(inside?0xFFE04747:0xDD35383E,48));dismissTarget.animate().scaleX(inside?1.18f:1).scaleY(inside?1.18f:1).setDuration(120).start();
+        if(fab!=null)fab.animate().scaleX(inside?.85f:1).scaleY(inside?.85f:1).setDuration(120).start();
+        if(inside){Vibrator vibrator=context.getSystemService(Vibrator.class);if(vibrator!=null&&vibrator.hasVibrator())vibrator.vibrate(VibrationEffect.createOneShot(25,VibrationEffect.DEFAULT_AMPLITUDE));}
+    }
+    private void removeDismissTarget(){overDismiss=false;if(dismissTarget!=null){dismissTarget.animate().cancel();try{wm.removeViewImmediate(dismissTarget);}catch(IllegalArgumentException ignored){}dismissTarget=null;}if(fab!=null){fab.animate().cancel();fab.setScaleX(1);fab.setScaleY(1);}}
     private WindowManager.LayoutParams params(int width){WindowManager.LayoutParams p=new WindowManager.LayoutParams(width,-2,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,PixelFormat.TRANSLUCENT);p.gravity=Gravity.TOP|Gravity.LEFT;return p;}
     private int screenWidth(){return context.getResources().getDisplayMetrics().widthPixels;}
     private int screenHeight(){return context.getResources().getDisplayMetrics().heightPixels;}
@@ -153,5 +175,5 @@ final class FloatingJobView {
     }
     private void closePanel(){if(panel==null||closing)return;if(slideMs()==0){removePanel();return;}closing=true;panel.animate().cancel();panel.animate().alpha(0).translationX(onLeft()?-dp(45):dp(45)).setDuration(slideMs()).withEndAction(()->{if(model.mode==FloatingJobs.Mode.COLLAPSED)removePanel();}).start();}
     private void removePanel(){if(panel!=null){panel.animate().cancel();try{wm.removeViewImmediate(panel);}catch(IllegalArgumentException ignored){}panel=null;rows=null;scroll=null;}closing=false;}
-    void hide(){handler.removeCallbacks(timeout);model.collapse();removePanel();if(fab!=null){try{wm.removeViewImmediate(fab);}catch(IllegalArgumentException ignored){}fab=null;}}
+    void hide(){removeDismissTarget();handler.removeCallbacks(timeout);model.collapse();removePanel();if(fab!=null){try{wm.removeViewImmediate(fab);}catch(IllegalArgumentException ignored){}fab=null;}}
 }

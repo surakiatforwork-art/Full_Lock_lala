@@ -66,6 +66,30 @@ public class OverlayChecks extends Instrumentation {
             try{java.lang.reflect.Method method=JobListener.class.getDeclaredMethod("openFloatingJob",FloatingJobs.Item.class);method.setAccessible(true);method.invoke(service(),new FloatingJobs.Item(target.getKey(),target.getPostTime(),"manual","manual",null,true,true));}catch(Exception e){throw new RuntimeException(e);}
         });waitForIdleSync();Thread.sleep(400);main(()->check(sends==3,"manual open works with auto-off"));
     }
+    private void motion(FloatingJobView target,int action,float x,float y){main(()->{View button=(View)field(target,"fab");long now=SystemClock.uptimeMillis();MotionEvent event=MotionEvent.obtain(now,now,action,x,y,0);button.dispatchTouchEvent(event);event.recycle();});}
+    private void dismissGesture(FloatingJobView target,boolean cancel)throws Exception{
+        int[] at=new int[2];main(()->{View button=(View)field(target,"fab");button.getLocationOnScreen(at);at[0]+=button.getWidth()/2;at[1]+=button.getHeight()/2;});
+        motion(target,0,at[0],at[1]);motion(target,2,at[0],at[1]+100);waitForIdleSync();Thread.sleep(250);
+        main(()->{View bin=(View)field(target,"dismissTarget");check(bin!=null,"drag reveals dismiss target");bin.getLocationOnScreen(at);at[0]+=bin.getWidth()/2;at[1]+=bin.getHeight()/2;});
+        motion(target,2,at[0],at[1]);main(()->check((boolean)field(target,"overDismiss"),"drag enters dismiss target"));capture("fulllock-dismiss-target.png");
+        motion(target,cancel?3:1,at[0],at[1]);main(()->check(field(target,"dismissTarget")==null,"dismiss target cleaned up"));
+    }
+    private void dismissChecks()throws Exception{
+        FloatingJobView live=(FloatingJobView)field(service(),"floating");
+        main(()->{MainActivity.historyForeground=false;live.restore();JobListener.refreshFloating();});waitForIdleSync();
+        dismissGesture(live,true);main(()->check(live.visible()&&!live.temporarilyHidden(),"cancelled drag does not dismiss"));
+        int unread=live.model.unread;dismissGesture(live,false);
+        main(()->{
+            check(!live.visible()&&live.temporarilyHidden(),"drop hides temporarily");check(Store.prefs(getTargetContext()).getBoolean("floatingEnabled",false),"drop leaves switch enabled");check(live.model.unread==unread,"drop keeps unread jobs");
+            JobListener.refreshFloating();JobListener.refreshFloating();check(!live.visible(),"watcher refresh does not revive dismissal");
+            service().onNotificationPosted(notification(7100,"ประกาศ","รับโบนัส ฿500",0,null));check(!live.visible(),"announcement does not revive bubble");
+            service().onNotificationPosted(notification(7101,"[ขนส่งสินค้า] ใหม่ > ทดสอบ","ขนส่งทันที ฿180.00 รับงานขนส่ง!",0,null));check(live.visible()&&!live.temporarilyHidden(),"new job revives bubble with auto-open off");
+        });
+        dismissGesture(live,false);main(()->{MainActivity.historyForeground=true;JobListener.restoreFloating();check(!live.visible(),"restore respects history restriction");MainActivity.historyForeground=false;JobListener.refreshFloating();check(live.visible(),"return to allowed page restores bubble");});
+        dismissGesture(live,false);main(()->{
+            Object watcher=field(service(),"foregroundWatcher");Set<String> driver=(Set<String>)field(watcher,"driverActivities");driver.add("dismiss-test");JobListener.refreshFloating();check(!live.visible(),"dismissal remains hidden in driver");driver.clear();JobListener.refreshFloating();check(live.visible()&&!live.temporarilyHidden(),"leaving driver revives dismissed bubble");
+        });
+    }
     private void capture(String name)throws Exception {
         if(!preview)return;waitForIdleSync();Thread.sleep(450);
         android.graphics.Bitmap bitmap=getUiAutomation().takeScreenshot();
@@ -113,7 +137,7 @@ public class OverlayChecks extends Instrumentation {
                 WindowManager.LayoutParams fp=(WindowManager.LayoutParams)field(view,"fabParams"),pp=(WindowManager.LayoutParams)field(view,"panelParams");check(pp.x>fp.x,"left FAB expands right");
                 View fab=(View)field(view,"fab");long now=SystemClock.uptimeMillis();int width=getTargetContext().getResources().getDisplayMetrics().widthPixels;
                 MotionEvent d=MotionEvent.obtain(now,now,0,10,10,0),m=MotionEvent.obtain(now,now+20,2,width,60,0),u=MotionEvent.obtain(now,now+40,1,width,60,0);fab.dispatchTouchEvent(d);fab.dispatchTouchEvent(m);fab.dispatchTouchEvent(u);d.recycle();m.recycle();u.recycle();
-                check(selected.size()==1,"drag does not open item");check(pp.x<fp.x,"right FAB expands left");check(view.model.mode==FloatingJobs.Mode.PINNED,"drag preserves expanded panel");
+                check(selected.size()==1,"drag does not open item");check(view.model.mode==FloatingJobs.Mode.COLLAPSED,"drag collapses panel for dismissal");view.toggle();check(((WindowManager.LayoutParams)field(view,"panelParams")).x<fp.x,"right FAB expands left");
             });
             capture("fulllock-fab-right.png");
             main(()->{view.toggle();view.offer(item(7));check(view.model.unread==1,"new unread after closing");view.hide();check(!view.visible(),"hide removes windows");check(view.model.unread==1,"hide retains unread");view.show();check(view.model.mode==FloatingJobs.Mode.COLLAPSED,"show returns compact");});
@@ -136,6 +160,7 @@ public class OverlayChecks extends Instrumentation {
                 Store.prefs(getTargetContext()).edit().putBoolean("enabled",false).apply();check(JobListener.floatingVisible(),"auto-off keeps FAB");
             });
             monitorChecks();
+            dismissChecks();
             int filterCount=new FilterChecks(getTargetContext()).run();
             int historyCount=new HistoryChecks(this).run();
             int uiCount=new UiChecks(this,preview).run(); result.putString("stream","OverlayChecks: "+checks+" checks passed\nFilterChecks: "+filterCount+" checks passed\nHistoryChecks: "+historyCount+" checks passed\nUiChecks: "+uiCount+" checks passed\n");

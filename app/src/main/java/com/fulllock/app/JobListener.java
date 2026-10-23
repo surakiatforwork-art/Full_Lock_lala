@@ -11,10 +11,11 @@ public class JobListener extends NotificationListenerService {
     private static JobListener instance;
     private FloatingJobView floating;
     private ForegroundWatcher foregroundWatcher;
+    private boolean wasDriverForeground;
     private final Map<String,PendingIntent> jobActions=new LinkedHashMap<>();
     private final Map<String,String> seen = new LinkedHashMap<>();
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener changes=(p,key)->{
-        if("floatingEnabled".equals(key)) { updateWatcher();syncFloating(); }
+        if("floatingEnabled".equals(key)) { if(p.getBoolean(key,true))floating.restore();updateWatcher();syncFloating(); }
         if("transitionMs".equals(key))floating.refreshMotion();
         if("showUnavailableFloating".equals(key))floating.refreshTheme();
         if("themeColor".equals(key)||"invertText".equals(key)||"fee".equals(key))floating.refreshTheme();
@@ -27,8 +28,10 @@ public class JobListener extends NotificationListenerService {
         Store.prefs(this).registerOnSharedPreferenceChangeListener(changes);
     }
     static void refreshFloating() { if(instance!=null)instance.syncFloating(); }
+    static void restoreFloating(){if(instance!=null&&instance.floating!=null){instance.floating.restore();instance.syncFloating();}}
     static boolean floatingVisible(){return instance!=null && instance.floating!=null && instance.floating.visible();}
     private void syncFloating() {
+        boolean driver=foregroundWatcher.driverForeground();if(wasDriverForeground&&!driver)floating.restore();wasDriverForeground=driver;
         if(!connected || !Store.prefs(this).getBoolean("floatingEnabled",true) || !android.provider.Settings.canDrawOverlays(this) || foregroundWatcher.blocked()) {floating.hide();return;}
         floating.show();
     }
@@ -114,7 +117,7 @@ public class JobListener extends NotificationListenerService {
         if (seen.size()>200) seen.remove(seen.keySet().iterator().next());
         Store.prefs(this).edit().putLong("lastReceived",System.currentTimeMillis()).apply();
         String rejection=Store.rejection(this,job);
-        syncFloating();floating.offer(new FloatingJobs.Item(sbn.getKey(),sbn.getPostTime(),title,text,job,rejection==null,n.contentIntent!=null));
+        floating.restore();syncFloating();floating.offer(new FloatingJobs.Item(sbn.getKey(),sbn.getPostTime(),title,text,job,rejection==null,n.contentIntent!=null));
         if (rejection != null) { record(sbn,title,text,false,rejection); return; }
         if(!Store.prefs(this).getBoolean("enabled",false)){record(sbn,title,text,false,"ตรงเงื่อนไข / ยังไม่เปิดอัตโนมัติ");return;}
         if (n.contentIntent == null) { record(sbn,title,text,false,"ตรงเงื่อนไข / เปิดงานนี้ไม่ได้"); return; }

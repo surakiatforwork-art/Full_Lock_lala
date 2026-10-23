@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
         p().registerOnSharedPreferenceChangeListener(updates);render();
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putString("page",page.name());state.putString("pendingExportId",pendingExportId);super.onSaveInstanceState(state);}
-    @Override protected void onStart(){super.onStart();foreground=true;historyForeground=page==Page.HISTORY;JobListener.refreshFloating();}
+    @Override protected void onStart(){super.onStart();foreground=true;historyForeground=page==Page.HISTORY;JobListener.restoreFloating();}
     @Override protected void onPause(){if(profileNameEditor!=null)saveInlineProfileName(false);if(swipeBar!=null)swipeBar.cancelStop();cancelStopGesture=false;if(activeActivity.get()==this)activeActivity.clear();dismissProfiles();super.onPause();}
     @Override protected void onResume(){super.onResume();if(!AppIntegrity.trusted(this))return;activeActivity=new java.lang.ref.WeakReference<>(this);reconnect();JobListener.refreshFloating();render();}
     @Override protected void onStop(){foreground=false;historyForeground=false;JobListener.refreshFloating();super.onStop();}
