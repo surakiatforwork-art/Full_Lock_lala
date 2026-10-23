@@ -10,7 +10,7 @@ import java.util.*;
 /** Emulator-only checks. No tests or synthetic notifications are shipped in the app APK. */
 public class OverlayChecks extends Instrumentation {
     private int checks;
-    private boolean preview,extraOnly,profilesOnly,profileModelOnly;
+    private boolean preview,extraOnly,profilesOnly,profileModelOnly,updatesOnly;
     private FloatingJobView view;
     private Map<String,?> saved;
     private BroadcastReceiver probe;
@@ -90,6 +90,11 @@ public class OverlayChecks extends Instrumentation {
             Object watcher=field(service(),"foregroundWatcher");Set<String> driver=(Set<String>)field(watcher,"driverActivities");driver.add("dismiss-test");JobListener.refreshFloating();check(!live.visible(),"dismissal remains hidden in driver");driver.clear();JobListener.refreshFloating();check(live.visible()&&!live.temporarilyHidden(),"leaving driver revives dismissed bubble");
         });
     }
+    private void updateGateChecks(){main(()->{
+        var c=getTargetContext();var prefs=Store.prefs(c);String old=prefs.getString("updateAvailable",null);boolean enabled=prefs.getBoolean("enabled",false);String history=prefs.getString("history","");int before=sends;
+        try{prefs.edit().putBoolean("enabled",true).apply();Updates.accept(c,"999999.0.1");check(!JobListener.floatingVisible(),"mandatory update hides floating controls");prefs.edit().putBoolean("enabled",true).apply();PendingIntent intent=PendingIntent.getBroadcast(c,6001,new Intent("com.fulllock.app.OPEN_PROBE").setPackage(c.getPackageName()),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);service().onNotificationPosted(notification(7201,"[ขนส่งสินค้า] gate > check","ขนส่งทันที ฿180.00 รับงานขนส่ง!",0,intent));check(history.equals(prefs.getString("history","")),"blocked listener does not process jobs");check(sends==before,"blocked old app does not send automatic open");}
+        finally{var edit=prefs.edit().putBoolean("enabled",enabled).remove("updateAnnounced");if(old==null)edit.remove("updateAvailable");else edit.putString("updateAvailable",old);edit.apply();c.getSystemService(NotificationManager.class).cancel(Updates.NOTIFICATION);JobListener.refreshFloating();}
+    });}
     private void capture(String name)throws Exception {
         if(!preview)return;waitForIdleSync();Thread.sleep(450);
         android.graphics.Bitmap bitmap=getUiAutomation().takeScreenshot();
@@ -99,9 +104,10 @@ public class OverlayChecks extends Instrumentation {
     private void shell(String command)throws Exception {
         try(android.os.ParcelFileDescriptor fd=getUiAutomation().executeShellCommand(command);java.io.InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){byte[] buffer=new byte[1024];while(input.read(buffer)!=-1){} }
     }
-    @Override public void onCreate(Bundle args){super.onCreate(args);preview=args!=null&&"true".equals(args.getString("preview"));extraOnly=args!=null&&"true".equals(args.getString("extraOnly"));profilesOnly=args!=null&&"true".equals(args.getString("profilesOnly"));profileModelOnly=args!=null&&"true".equals(args.getString("profileModelOnly"));start();}
+    @Override public void onCreate(Bundle args){super.onCreate(args);updatesOnly=args!=null&&"true".equals(args.getString("updatesOnly"));preview=args!=null&&"true".equals(args.getString("preview"));extraOnly=args!=null&&"true".equals(args.getString("extraOnly"));profilesOnly=args!=null&&"true".equals(args.getString("profilesOnly"));profileModelOnly=args!=null&&"true".equals(args.getString("profileModelOnly"));start();}
     private void runProfiles(){Bundle result=new Bundle();int code=Activity.RESULT_OK;Map<String,?> saved=Store.prefs(getTargetContext()).getAll();try{int model=new ProfileChecks(this).run();int ui=profileModelOnly?0:new ProfileUiChecks(this).run();result.putString("stream","ProfileChecks: "+model+" checks passed\nProfileUiChecks: "+ui+" checks passed\n");}catch(Throwable e){code=Activity.RESULT_CANCELED;result.putString("stream","Profile checks failed: "+e+"\n");}finally{runOnMainSync(()->{var edit=Store.prefs(getTargetContext()).edit().clear();for(var entry:saved.entrySet()){Object value=entry.getValue();if(value instanceof String)edit.putString(entry.getKey(),(String)value);else if(value instanceof Boolean)edit.putBoolean(entry.getKey(),(Boolean)value);else if(value instanceof Integer)edit.putInt(entry.getKey(),(Integer)value);else if(value instanceof Long)edit.putLong(entry.getKey(),(Long)value);else if(value instanceof Float)edit.putFloat(entry.getKey(),(Float)value);}edit.apply();});}finish(code,result);}
     @Override public void onStart(){
+        if(updatesOnly){Bundle result=new Bundle();int code=Activity.RESULT_OK;try{result.putString("stream","UpdateChecks: "+new UpdateChecks(this).run()+" checks passed\n");}catch(Throwable error){code=Activity.RESULT_CANCELED;result.putString("stream","Update checks failed: "+error+"\n");}finish(code,result);return;}
         if(profilesOnly){runProfiles();return;}
         Bundle result=new Bundle();int code=Activity.RESULT_OK;List<String> selected=new ArrayList<>();
         try{
@@ -110,7 +116,7 @@ public class OverlayChecks extends Instrumentation {
             if(!JobListener.connected){shell("cmd notification disallow_listener com.fulllock.app/com.fulllock.app.JobListener");shell("cmd notification allow_listener com.fulllock.app/com.fulllock.app.JobListener");}
             for(int i=0;i<80&&!JobListener.connected;i++)Thread.sleep(250);
             main(()->{
-                check(service()!=null&&JobListener.connected,"service connected");var p=Store.prefs(getTargetContext());saved=p.getAll();p.edit().putBoolean("showUnavailableFloating",true).putInt("fee",20).putInt("transitionMs",200).putBoolean("enabled",false).putBoolean("floatingEnabled",false).putInt("floatX",8).putInt("floatY",260).apply();
+                check(service()!=null&&JobListener.connected,"service connected");var p=Store.prefs(getTargetContext());saved=p.getAll();p.edit().remove("updateAvailable").remove("updateAnnounced").putLong("updateLastCheck",System.currentTimeMillis()).putBoolean("showUnavailableFloating",true).putInt("fee",20).putInt("transitionMs",200).putBoolean("enabled",false).putBoolean("floatingEnabled",false).putInt("floatX",8).putInt("floatY",260).apply();
                 check(!JobListener.floatingVisible(),"FAB switch hides service window");
                 view=new FloatingJobView(getTargetContext(),entry->selected.add(entry.id));view.show();check(view.visible(),"FAB visible");
                 WindowManager.LayoutParams fp=(WindowManager.LayoutParams)field(view,"fabParams");check(fp.width<=Math.round(80*getTargetContext().getResources().getDisplayMetrics().density),"compact 80dp mascot button");
@@ -161,6 +167,7 @@ public class OverlayChecks extends Instrumentation {
             });
             monitorChecks();
             dismissChecks();
+            updateGateChecks();
             int filterCount=new FilterChecks(getTargetContext()).run();
             int historyCount=new HistoryChecks(this).run();
             int uiCount=new UiChecks(this,preview).run(); result.putString("stream","OverlayChecks: "+checks+" checks passed\nFilterChecks: "+filterCount+" checks passed\nHistoryChecks: "+historyCount+" checks passed\nUiChecks: "+uiCount+" checks passed\n");

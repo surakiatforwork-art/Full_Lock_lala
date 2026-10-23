@@ -12,6 +12,8 @@ public class JobListener extends NotificationListenerService {
     private FloatingJobView floating;
     private ForegroundWatcher foregroundWatcher;
     private boolean wasDriverForeground;
+    private final Handler updateHandler=new Handler(Looper.getMainLooper());
+    private final Runnable updateCheck=new Runnable(){public void run(){if(!connected)return;Updates.check(JobListener.this);updateHandler.postDelayed(this,6*60*60*1000L);}};
     private final Map<String,PendingIntent> jobActions=new LinkedHashMap<>();
     private final Map<String,String> seen = new LinkedHashMap<>();
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener changes=(p,key)->{
@@ -32,14 +34,14 @@ public class JobListener extends NotificationListenerService {
     static boolean floatingVisible(){return instance!=null && instance.floating!=null && instance.floating.visible();}
     private void syncFloating() {
         boolean driver=foregroundWatcher.driverForeground();if(wasDriverForeground&&!driver)floating.restore();wasDriverForeground=driver;
-        if(!connected || !Store.prefs(this).getBoolean("floatingEnabled",true) || !android.provider.Settings.canDrawOverlays(this) || foregroundWatcher.blocked()) {floating.hide();return;}
+        if(Updates.blocked(this) || !connected || !Store.prefs(this).getBoolean("floatingEnabled",true) || !android.provider.Settings.canDrawOverlays(this) || foregroundWatcher.blocked()) {floating.hide();return;}
         floating.show();
     }
     private void updateWatcher(){if(connected && Store.prefs(this).getBoolean("floatingEnabled",true)){foregroundWatcher.refresh();foregroundWatcher.start();}else foregroundWatcher.stop();}
-    @Override public void onListenerConnected() { if(floating==null)return;connected=true;updateWatcher();syncFloating(); }
-    @Override public void onListenerDisconnected() { connected=false;if(foregroundWatcher!=null)foregroundWatcher.stop();if(floating!=null)floating.hide(); }
+    @Override public void onListenerConnected() { if(floating==null)return;connected=true;updateWatcher();syncFloating();updateHandler.removeCallbacks(updateCheck);updateHandler.post(updateCheck); }
+    @Override public void onListenerDisconnected() { connected=false;updateHandler.removeCallbacks(updateCheck);if(foregroundWatcher!=null)foregroundWatcher.stop();if(floating!=null)floating.hide(); }
     @Override public void onDestroy() {
-        connected=false;Store.prefs(this).unregisterOnSharedPreferenceChangeListener(changes);
+        connected=false;updateHandler.removeCallbacks(updateCheck);Store.prefs(this).unregisterOnSharedPreferenceChangeListener(changes);
         if(foregroundWatcher!=null)foregroundWatcher.stop();if(floating!=null)floating.hide();if(instance==this)instance=null;super.onDestroy();
     }
     @Override public void onNotificationRemoved(StatusBarNotification sbn) {
@@ -51,7 +53,7 @@ public class JobListener extends NotificationListenerService {
         Store.log(this,title,text,worked,reason,notification.getKey(),notification.getPostTime());
     }
     private void openFloatingJob(FloatingJobs.Item item) {
-        if(!connected)return;
+        if(!connected||Updates.blocked(this))return;
         try {
             StatusBarNotification target=null;
             StatusBarNotification[] activeNotifications=getActiveNotifications();
@@ -69,7 +71,7 @@ public class JobListener extends NotificationListenerService {
     }
     private static String actionKey(String key,long time,String title,String text){return key+"\n"+time+"\n"+title+"\n"+text;}
     static boolean openHistory(org.json.JSONObject entry){
-        if(instance==null||!connected)return false;
+        if(instance==null||!connected||Updates.blocked(instance))return false;
         try{return instance.openHistory(entry,instance.getActiveNotifications());}catch(SecurityException e){return false;}
     }
     private boolean openHistory(org.json.JSONObject entry,StatusBarNotification[] active){
@@ -93,11 +95,12 @@ public class JobListener extends NotificationListenerService {
     }
     private void toast(String message){android.widget.Toast.makeText(this,message,android.widget.Toast.LENGTH_SHORT).show();}
     private void sendOpen(PendingIntent intent) throws PendingIntent.CanceledException {
+        if(Updates.blocked(this))throw new SecurityException("Update required");
         if(Build.VERSION.SDK_INT>=34){ActivityOptions opts=ActivityOptions.makeBasic();opts.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);intent.send(this,0,null,null,null,null,opts.toBundle());}
         else intent.send();
     }
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
-        if(floating==null)return;
+        if(floating==null||Updates.blocked(this))return;
         if (!DRIVER.equals(sbn.getPackageName())) return;
         Notification n = sbn.getNotification();
         boolean ongoing=(n.flags & Notification.FLAG_ONGOING_EVENT)!=0, summary=(n.flags & Notification.FLAG_GROUP_SUMMARY)!=0;

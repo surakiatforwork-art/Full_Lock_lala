@@ -23,6 +23,7 @@ public class MainActivity extends Activity {
     private FrameLayout frame;
     private View drawer;
     private SwipeBar swipeBar;
+    private AlertDialog mandatoryUpdate;
     private PopupWindow profileDropdown;
     private boolean cancelStopGesture;
     private boolean unwantedExpanded;
@@ -49,10 +50,17 @@ public class MainActivity extends Activity {
     @Override protected void onSaveInstanceState(Bundle state){state.putString("page",page.name());state.putString("pendingExportId",pendingExportId);super.onSaveInstanceState(state);}
     @Override protected void onStart(){super.onStart();foreground=true;historyForeground=page==Page.HISTORY;JobListener.restoreFloating();}
     @Override protected void onPause(){if(profileNameEditor!=null)saveInlineProfileName(false);if(swipeBar!=null)swipeBar.cancelStop();cancelStopGesture=false;if(activeActivity.get()==this)activeActivity.clear();dismissProfiles();super.onPause();}
-    @Override protected void onResume(){super.onResume();if(!AppIntegrity.trusted(this))return;activeActivity=new java.lang.ref.WeakReference<>(this);reconnect();JobListener.refreshFloating();render();}
+    @Override protected void onResume(){super.onResume();if(!AppIntegrity.trusted(this))return;activeActivity=new java.lang.ref.WeakReference<>(this);reconnect();JobListener.refreshFloating();render();Updates.check(this);}
     @Override protected void onStop(){foreground=false;historyForeground=false;JobListener.refreshFloating();super.onStop();}
-    @Override protected void onDestroy(){p().unregisterOnSharedPreferenceChangeListener(updates);super.onDestroy();}
-    @Override public void onBackPressed(){if(profileNameEditor!=null){profileNameEditor=null;editingProfileId=null;render();return;}if(page==Page.PROFILES&&profileDeleteMode){profileDeleteMode=false;selectedProfileIds.clear();render();return;}if(profileDropdown!=null){dismissProfiles();return;}if(swipeBar!=null&&swipeBar.isConfirming()){swipeBar.cancelStop();return;}if(drawer!=null){closeDrawer();return;}if(page!=Page.FILTERS){page=Page.FILTERS;render();return;}super.onBackPressed();}
+    @Override protected void onDestroy(){if(mandatoryUpdate!=null)mandatoryUpdate.dismiss();p().unregisterOnSharedPreferenceChangeListener(updates);super.onDestroy();}
+    @Override public void onBackPressed(){if(Updates.blocked(this)){showUpdate(p().getString("updateAvailable",""));return;}if(profileNameEditor!=null){profileNameEditor=null;editingProfileId=null;render();return;}if(page==Page.PROFILES&&profileDeleteMode){profileDeleteMode=false;selectedProfileIds.clear();render();return;}if(profileDropdown!=null){dismissProfiles();return;}if(swipeBar!=null&&swipeBar.isConfirming()){swipeBar.cancelStop();return;}if(drawer!=null){closeDrawer();return;}if(page!=Page.FILTERS){page=Page.FILTERS;render();return;}super.onBackPressed();}
+    static boolean showUpdate(String version){
+        MainActivity a=activeActivity.get();if(a==null||a.isFinishing()||a.isDestroyed())return false;
+        if(a.mandatoryUpdate!=null&&a.mandatoryUpdate.isShowing())return true;
+        a.dismissProfiles();a.closeDrawer();if(a.swipeBar!=null)a.swipeBar.cancelStop();
+        a.mandatoryUpdate=new AlertDialog.Builder(a).setTitle("กรุณาอัปเดต Full Lock").setMessage("มีเวอร์ชัน "+version+" พร้อมแล้ว\nอัปเดตเพื่อใช้งานต่อ").setCancelable(false).setPositiveButton("ไปดาวน์โหลด",null).create();
+        a.mandatoryUpdate.setCanceledOnTouchOutside(false);a.mandatoryUpdate.setOnShowListener(d->a.mandatoryUpdate.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->a.openExternal(Updates.DOWNLOAD)));a.mandatoryUpdate.show();AppTheme.styleDialog(a,a.mandatoryUpdate);return true;
+    }
     static void cancelPendingStop(){MainActivity activity=activeActivity.get();if(activity!=null&&activity.swipeBar!=null)activity.swipeBar.cancelStop();}
     @Override public boolean dispatchTouchEvent(MotionEvent event){
         if(event.getActionMasked()==MotionEvent.ACTION_DOWN){cancelStopGesture=false;if(swipeBar!=null&&swipeBar.isConfirming()&&!swipeBar.confirmationContains(event.getRawX(),event.getRawY())){int[] at=new int[2];swipeBar.getLocationOnScreen(at);cancelStopGesture=event.getRawX()>=at[0]&&event.getRawX()<at[0]+swipeBar.getWidth()&&event.getRawY()>=at[1]&&event.getRawY()<at[1]+swipeBar.getHeight();swipeBar.cancelStop();}}
