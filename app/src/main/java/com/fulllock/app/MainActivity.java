@@ -27,6 +27,8 @@ public class MainActivity extends Activity {
     private PopupWindow profileDropdown;
     private boolean cancelStopGesture;
     private boolean unwantedExpanded;
+    private int permissionAttempts;
+    private boolean permissionQueued;
     private EditText profileNameEditor;
     private String editingProfileId;
     private boolean profileDeleteMode;
@@ -42,15 +44,30 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         if(!AppIntegrity.trusted(this)){new AlertDialog.Builder(this).setTitle("เปิดแอปนี้ไม่ได้").setMessage("โปรดติดตั้ง Full Lock จากผู้พัฒนาอีกครั้ง").setCancelable(false).setPositiveButton("ปิด",(d,w)->finish()).show();return;}
-        if(state!=null)pendingExportId=state.getString("pendingExportId");
+        if(state!=null){pendingExportId=state.getString("pendingExportId");permissionAttempts=state.getInt("permissionAttempts",0);}
         if(state!=null){try{page=Page.valueOf(state.getString("page","FILTERS"));}catch(IllegalArgumentException ignored){}}
         else if(!p().getBoolean("permissionsReviewed",false))page=Page.PERMISSIONS;
         p().registerOnSharedPreferenceChangeListener(updates);render();
     }
-    @Override protected void onSaveInstanceState(Bundle state){state.putString("page",page.name());state.putString("pendingExportId",pendingExportId);super.onSaveInstanceState(state);}
+    @Override protected void onSaveInstanceState(Bundle state){state.putInt("permissionAttempts",permissionAttempts);state.putString("page",page.name());state.putString("pendingExportId",pendingExportId);super.onSaveInstanceState(state);}
     @Override protected void onStart(){super.onStart();foreground=true;historyForeground=page==Page.HISTORY;JobListener.restoreFloating();}
     @Override protected void onPause(){if(profileNameEditor!=null)saveInlineProfileName(false);if(swipeBar!=null)swipeBar.cancelStop();cancelStopGesture=false;if(activeActivity.get()==this)activeActivity.clear();dismissProfiles();super.onPause();}
     @Override protected void onResume(){super.onResume();if(!AppIntegrity.trusted(this))return;activeActivity=new java.lang.ref.WeakReference<>(this);reconnect();JobListener.refreshFloating();render();Updates.check(this);}
+    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused)queuePermissionSetup();}
+    private void queuePermissionSetup(){
+        if(permissionQueued||page!=Page.PERMISSIONS||p().getBoolean("permissionsReviewed",false)||Updates.blocked(this))return;
+        permissionQueued=true;
+        new Handler(Looper.getMainLooper()).postDelayed(()->{
+            permissionQueued=false;
+            if(isFinishing()||isDestroyed()||!hasWindowFocus()||page!=Page.PERMISSIONS||p().getBoolean("permissionsReviewed",false)||Updates.blocked(this))return;
+            for(int step=0;step<PermissionSetup.TITLES.length;step++){
+                if((permissionAttempts&(1<<step))!=0||PermissionSetup.ready(this,step))continue;
+                permissionAttempts|=1<<step;
+                Toast.makeText(this,"อนุญาต: "+PermissionSetup.TITLES[step]+" แล้วกลับมาที่ Full Lock",Toast.LENGTH_LONG).show();
+                PermissionSetup.open(this,step);return;
+            }
+        },600);
+    }
     @Override protected void onStop(){foreground=false;historyForeground=false;JobListener.refreshFloating();super.onStop();}
     @Override protected void onDestroy(){if(mandatoryUpdate!=null)mandatoryUpdate.dismiss();p().unregisterOnSharedPreferenceChangeListener(updates);super.onDestroy();}
     @Override public void onBackPressed(){if(Updates.blocked(this)){showUpdate(p().getString("updateAvailable",""));return;}if(profileNameEditor!=null){profileNameEditor=null;editingProfileId=null;render();return;}if(page==Page.PROFILES&&profileDeleteMode){profileDeleteMode=false;selectedProfileIds.clear();render();return;}if(profileDropdown!=null){dismissProfiles();return;}if(swipeBar!=null&&swipeBar.isConfirming()){swipeBar.cancelStop();return;}if(drawer!=null){closeDrawer();return;}if(page!=Page.FILTERS){page=Page.FILTERS;render();return;}super.onBackPressed();}
@@ -156,10 +173,10 @@ public class MainActivity extends Activity {
     }
     private void choose(String title,String key,String[] options){dialog(new AlertDialog.Builder(this).setTitle(title).setSingleChoiceItems(options,p().getInt(key,0),(d,w)->{p().edit().putInt(key,w).apply();d.dismiss();render();}).setNegativeButton("ยกเลิก",null));}
     private void permissionsBody(){
-        boolean first=!p().getBoolean("permissionsReviewed",false);LinearLayout intro=card(null,first?"เริ่มจากการอ่านงาน":"ตั้งค่าสิทธิ์");intro.addView(label("แตะแต่ละข้อเพื่อเปิดการตั้งค่าของเครื่อง\nเลือกทำภายหลังได้ และกลับมาแก้จากเมนู ☰",13,muted,false));
+        boolean first=!p().getBoolean("permissionsReviewed",false);LinearLayout intro=card(null,first?"เริ่มจากการอ่านงาน":"ตั้งค่าสิทธิ์");intro.addView(label("แอปจะพาไปอนุญาตทีละข้อ เมื่อเสร็จให้กลับมาที่ Full Lock\nหากยังไม่พร้อม กดย้อนกลับเพื่อข้ามข้อนั้นได้",13,muted,false));
         for(int i=0;i<PermissionSetup.TITLES.length;i++){
             final int step=i;LinearLayout c=card(String.format(java.util.Locale.ROOT,"%02d",i+1),PermissionSetup.TITLES[i]);c.addView(label(PermissionSetup.DETAILS[i],13,muted,false));space(c,7);
-            item(c,PermissionSetup.ready(this,i)?"✓ พร้อมแล้ว":"ยังไม่เปิด",PermissionSetup.ready(this,i)?"จัดการ":"เปิดตั้งค่า",()->PermissionSetup.open(this,step));
+            item(c,PermissionSetup.ready(this,i)?"✓ พร้อมแล้ว":"ยังไม่เปิด",PermissionSetup.ready(this,i)?"จัดการ":"เปิดตั้งค่า",()->{permissionAttempts|=1<<step;PermissionSetup.open(this,step);});
         }
         LinearLayout c=card(null,null);TextView done=action(first?"เริ่มใช้งาน":"กลับไปตัวกรอง",()->{p().edit().putBoolean("permissionsReviewed",true).apply();page=Page.FILTERS;reconnect();render();});done.setTag("finish-permissions");c.addView(done,new LinearLayout.LayoutParams(-1,dp(48)));
         if(first){space(c,8);TextView skip=label("ไว้ภายหลัง",13,muted,false);skip.setGravity(Gravity.CENTER);pad(skip,0,10,0,10);skip.setOnClickListener(v->{p().edit().putBoolean("permissionsReviewed",true).apply();page=Page.FILTERS;render();});c.addView(skip);}
