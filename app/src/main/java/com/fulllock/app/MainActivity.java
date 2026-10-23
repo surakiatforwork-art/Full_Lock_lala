@@ -145,6 +145,7 @@ public class MainActivity extends Activity {
         }
         LinearLayout c=card(null,null);TextView done=action(first?"เริ่มใช้งาน":"กลับไปตัวกรอง",()->{p().edit().putBoolean("permissionsReviewed",true).apply();page=Page.FILTERS;reconnect();render();});done.setTag("finish-permissions");c.addView(done,new LinearLayout.LayoutParams(-1,dp(48)));
         if(first){space(c,8);TextView skip=label("ไว้ภายหลัง",13,muted,false);skip.setGravity(Gravity.CENTER);pad(skip,0,10,0,10);skip.setOnClickListener(v->{p().edit().putBoolean("permissionsReviewed",true).apply();page=Page.FILTERS;render();});c.addView(skip);}
+        LinearLayout trial=card(null,null);View sample=item(trial,"ลองตัวกรอง","",this::sample);sample.setTag("sample-filter");
     }
     private TextView action(String text,Runnable click){TextView t=label(text,15,AppTheme.onAccent(this),true);t.setGravity(Gravity.CENTER);t.setBackground(AppTheme.background(accent,dp(8)));t.setOnClickListener(v->click.run());return t;}
     private void closeDrawer(){if(drawer!=null){frame.removeView(drawer);drawer=null;}}
@@ -158,9 +159,14 @@ public class MainActivity extends Activity {
         nav.addView(label("การอนุญาตสิทธิ์",16,ink,true));space(nav,8);
         for(int i=0;i<PermissionSetup.TITLES.length;i++){final int step=i;item(nav,PermissionSetup.TITLES[i],PermissionSetup.ready(this,i)?"✓":"ตั้งค่า",()->PermissionSetup.open(this,step));}
         item(nav,"ดูคำแนะนำการตั้งค่า","",()->{page=Page.PERMISSIONS;render();});space(nav,12);line(nav);space(nav,12);
-        item(nav,"ลองตัวกรอง","",this::sample);item(nav,"ตรวจการทำงาน","",this::diagnostics);View support=item(nav,"♡ สนับสนุนผู้พัฒนา","Ko-fi ↗",()->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://ko-fi.com/lphantoml")));}catch(ActivityNotFoundException e){Toast.makeText(this,"เปิดลิงก์ไม่ได้",Toast.LENGTH_SHORT).show();}});support.setTag("support-developer");space(nav,15);nav.addView(label("Full Lock "+version(),11,muted,false));space(nav,3);nav.addView(label("Dev by PHANToM",10,muted,false));space(nav,14);line(nav);
         View theme=item(nav,"◐ ธีม","",()->{page=Page.THEME;render();});theme.setTag("theme-menu");
+        item(nav,"ตรวจการทำงาน","",this::diagnostics);
+        View website=item(nav,"เว็บไซต์ Full Lock","↗",()->openExternal("https://lalamove-helper.vercel.app/"));website.setTag("website-menu");
+        View support=item(nav,"เลี้ยงกาแฟ PHANToM","Ko-fi ↗",()->openExternal("https://ko-fi.com/lphantoml"));support.setTag("support-developer");
+        space(nav,15);nav.addView(label("Full Lock "+version(),11,muted,false));space(nav,3);nav.addView(label("Dev by PHANToM",10,muted,false));
+
     }
+    private void openExternal(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(ActivityNotFoundException e){Toast.makeText(this,"เปิดลิงก์ไม่ได้",Toast.LENGTH_SHORT).show();}}
     private void transitionSettings(LinearLayout nav){
         TextView expand=label("▾ ตั้งค่าปุ่มลอย",13,muted,false);expand.setTag("transition-toggle");pad(expand,0,8,0,8);nav.addView(expand);
         LinearLayout controls=column();controls.setVisibility(View.GONE);controls.setTag("transition-settings");nav.addView(controls);expand.setOnClickListener(v->{boolean show=controls.getVisibility()!=View.VISIBLE;controls.setVisibility(show?View.VISIBLE:View.GONE);expand.setText((show?"▴ ":"▾ ")+"ตั้งค่าปุ่มลอย");});
