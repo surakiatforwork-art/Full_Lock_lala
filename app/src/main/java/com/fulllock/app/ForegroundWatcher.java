@@ -36,5 +36,5 @@ final class ForegroundWatcher {
             cursor=now+1;
         }catch(SecurityException ignored){driverActivities.clear();cursor=0;}
     }
-    boolean blocked(){return MainActivity.foreground || !driverActivities.isEmpty() || !context.getSystemService(PowerManager.class).isInteractive() || context.getSystemService(KeyguardManager.class).isKeyguardLocked();}
+    boolean blocked(){return MainActivity.historyForeground || !driverActivities.isEmpty() || !context.getSystemService(PowerManager.class).isInteractive() || context.getSystemService(KeyguardManager.class).isKeyguardLocked();}
 }

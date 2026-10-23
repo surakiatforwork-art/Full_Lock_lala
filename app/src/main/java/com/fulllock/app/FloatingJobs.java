@@ -28,5 +28,6 @@ final class FloatingJobs {
     void collapse(){mode=Mode.COLLAPSED;}
     void expire(){if(mode==Mode.PREVIEW)collapse();}
     void reset(){items.clear();unread=0;collapse();}
+    List<Item> displayed(boolean showUnavailable,boolean preview){List<Item> visible=new ArrayList<>();for(int i=0;i<items.size()&&(!preview||i==0);i++){Item item=items.get(i);if(showUnavailable||item.available)visible.add(item);}return visible;}
     void removed(String key,long time){for(Item item:items)if(item.key.equals(key)&&item.postTime<=time)item.available=false;}
 }

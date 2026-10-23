@@ -37,6 +37,10 @@ public class ParserChecks {
         check(JobParser.notificationJob(title,"ประกาศ ตัวอย่างงาน: "+body,false,false)==null,"announcement quoting job ignored");
         check(JobParser.notificationJob(title,"งานล่วงหน้า ฿156.00 รับงานขนส่ง!",false,false)!=null,"scheduled job eligible");
         check(JobParser.notificationJob(title,null,false,false)==null,"empty notification ignored");
-        System.out.println("ParserChecks: 29 checks passed");
+        check(tipped.overlayNet(20).compareTo(new BigDecimal("228.80"))==0,"overlay deducts fee from fare plus tip");
+        check(tipped.overlayNet(0).compareTo(new BigDecimal("286.00"))==0,"overlay no fee");
+        check(tipped.overlayNet(100).compareTo(BigDecimal.ZERO)==0,"overlay full fee");
+        check(new JobParser.Job("","","","",new BigDecimal("1.01"),BigDecimal.ZERO,"","").overlayNet(50).equals(new BigDecimal("0.51")),"overlay money rounding");
+        System.out.println("ParserChecks: 33 checks passed");
     }
 }

@@ -15,24 +15,28 @@ final class SwipeBar extends FrameLayout {
     private final BooleanSupplier commit;
     private final boolean enabled;
     private float downX;
-    private boolean tracking,feedbackGiven;
+    private boolean tracking,feedbackGiven,confirming;
     SwipeBar(Context c,boolean enabled,BooleanSupplier commit){
         super(c);this.enabled=enabled;this.commit=commit;setTag("swipe-bar");setPadding(dp(6),dp(6),dp(6),dp(6));setFocusable(true);normal();
     }
     private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private TextView text(String value){TextView t=new TextView(getContext());t.setText(value);t.setTextColor(AppTheme.onAccent(getContext()));t.setTextSize(17);t.setTypeface(null,Typeface.BOLD);t.setGravity(Gravity.CENTER);return t;}
     private void normal(){
-        removeAllViews();setBackground(AppTheme.background(AppTheme.accent(getContext()),dp(17)));setContentDescription(enabled?"แตะเพื่อหยุด":"ปัดเพื่อเริ่ม");
-        TextView label=text(enabled?"แตะเพื่อหยุด":"ปัดเพื่อเริ่ม  ››");if(!enabled)label.setPadding(dp(50),0,0,0);addView(label,new LayoutParams(-1,-1));
+        confirming=false;removeAllViews();android.graphics.drawable.GradientDrawable background=AppTheme.background(enabled?AppTheme.page(getContext()):AppTheme.accent(getContext()),dp(17));if(enabled)background.setStroke(dp(2),AppTheme.accent(getContext()));setBackground(background);setContentDescription(enabled?"แตะเพื่อหยุด":"ปัดเพื่อเริ่ม");
+        TextView label=text(enabled?"แตะเพื่อหยุด":"ปัดเพื่อเริ่ม  ››");if(enabled)label.setTextColor(AppTheme.ink(getContext()));if(!enabled)label.setPadding(dp(50),0,0,0);addView(label,new LayoutParams(-1,-1));
         setOnClickListener(enabled?v->confirmStop():null);
         if(!enabled){handle=text("→");handle.setTextSize(28);handle.setTextColor(AppTheme.accent(getContext()));handle.setBackground(AppTheme.background(AppTheme.surface(getContext()),dp(12)));handle.setElevation(dp(2));addView(handle,new LayoutParams(dp(48),-1,Gravity.START));}
     }
     private void confirmStop(){
-        removeAllViews();setOnClickListener(null);setContentDescription("ยืนยันหยุดทำงาน หรือยกเลิก");
+        confirming=true;removeAllViews();setOnClickListener(null);setContentDescription("แตะยืนยันทางขวาเพื่อหยุด แตะที่อื่นเพื่อยกเลิก");
         LinearLayout choices=new LinearLayout(getContext());choices.setGravity(Gravity.CENTER_VERTICAL);addView(choices,new LayoutParams(-1,-1));
-        TextView confirm=text("ยืนยันหยุดทำงาน");confirm.setTag("stop-confirm");choices.addView(confirm,new LinearLayout.LayoutParams(0,-1,1));confirm.setOnClickListener(v->commit.getAsBoolean());
-        TextView cancel=text("ยกเลิก");cancel.setTag("stop-cancel");cancel.setTextColor(Color.BLACK);cancel.setTextSize(14);cancel.setBackground(AppTheme.background(Color.WHITE,dp(11)));cancel.setElevation(dp(4));LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(dp(82),-1);cp.setMargins(dp(8),dp(2),dp(3),dp(3));choices.addView(cancel,cp);cancel.setOnClickListener(v->normal());
+        TextView hint=text("หยุดทำงานหรือไม่?");hint.setTextColor(AppTheme.ink(getContext()));choices.addView(hint,new LinearLayout.LayoutParams(0,-1,1));hint.setOnClickListener(v->cancelStop());
+        TextView confirm=text("ยืนยัน");confirm.setTag("stop-confirm");confirm.setTextSize(14);confirm.setBackground(AppTheme.background(AppTheme.accent(getContext()),dp(11)));confirm.setElevation(dp(3));LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(dp(90),-1);cp.setMargins(dp(8),dp(2),dp(3),dp(3));choices.addView(confirm,cp);confirm.setOnClickListener(v->{confirming=false;commit.getAsBoolean();});
     }
+    void cancelStop(){if(confirming)normal();}
+    boolean isConfirming(){return confirming;}
+    boolean confirmationContains(float x,float y){View confirm=findViewWithTag("stop-confirm");if(confirm==null)return false;int[] at=new int[2];confirm.getLocationOnScreen(at);return x>=at[0]&&x<at[0]+confirm.getWidth()&&y>=at[1]&&y<at[1]+confirm.getHeight();}
+    @Override protected void onDetachedFromWindow(){cancelStop();super.onDetachedFromWindow();}
     private float travel(){return Math.max(0,getWidth()-getPaddingLeft()-getPaddingRight()-handle.getWidth());}
     private boolean atEnd(){return travel()>0&&handle.getTranslationX()>=travel()-dp(2);}
     private void reset(){handle.animate().translationX(0).setDuration(150).start();tracking=false;getParent().requestDisallowInterceptTouchEvent(false);}

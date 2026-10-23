@@ -16,7 +16,8 @@ public class JobListener extends NotificationListenerService {
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener changes=(p,key)->{
         if("floatingEnabled".equals(key)) { updateWatcher();syncFloating(); }
         if("transitionMs".equals(key))floating.refreshMotion();
-        if("themeColor".equals(key)||"invertText".equals(key))floating.refreshTheme();
+        if("showUnavailableFloating".equals(key))floating.refreshTheme();
+        if("themeColor".equals(key)||"invertText".equals(key)||"fee".equals(key))floating.refreshTheme();
     };
     static final String DRIVER = "com.lalamove.global.driver.sea";
     @Override public void onCreate() {

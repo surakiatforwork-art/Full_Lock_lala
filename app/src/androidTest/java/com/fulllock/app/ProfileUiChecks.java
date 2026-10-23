@@ -16,14 +16,14 @@ final class ProfileUiChecks {
     void click(String text)throws Exception{AccessibilityNodeInfo n=node(text);while(!n.isClickable()&&n.getParent()!=null)n=n.getParent();check(n.performAction(AccessibilityNodeInfo.ACTION_CLICK),"click "+text);settle();}
     void name(String value)throws Exception{AccessibilityNodeInfo field=find(test.getUiAutomation().getRootInActiveWindow(),null,"android.widget.EditText");check(field!=null,"profile name input");Bundle args=new Bundle();args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,value);check(field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,args),"enter profile name");}
     void selector()throws Exception{test.runOnMainSync(()->activity.getWindow().getDecorView().findViewWithTag("profile-selector").performClick());settle();}
-    void manage()throws Exception{selector();click("จัดการ");}
+    void manage()throws Exception{selector();click("จัดการโปรไฟล์");}
     void importFile(File file)throws Exception{test.runOnMainSync(()->activity.onActivityResult(201,Activity.RESULT_OK,new Intent().setData(android.net.Uri.fromFile(file))));settle();}
     void capture(String name)throws Exception{settle();android.graphics.Bitmap bitmap=test.getUiAutomation().takeScreenshot();File output=new File(test.getTargetContext().getExternalFilesDir("validation"),name);try(FileOutputStream out=new FileOutputStream(output)){bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}bitmap.recycle();}
     int run()throws Exception {
         Context c=test.getTargetContext();test.runOnMainSync(()->Store.prefs(c).edit().putBoolean("permissionsReviewed",true).putBoolean("enabled",false).apply());
         try{
             activity=(MainActivity)test.startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));settle();check(activity.getWindow().getDecorView().findViewWithTag("profile-selector")!=null,"selector in filter header");
-            selector();click("เพิ่ม");name("เที่ยวเช้า");click("บันทึก");check(Profiles.activeName().equals("เที่ยวเช้า"),"new profile selected");
+            selector();click("เพิ่มโปรไฟล์");name("เที่ยวเช้า");click("บันทึก");check(Profiles.activeName().equals("เที่ยวเช้า"),"new profile selected");
             manage();click("เปลี่ยนชื่อ");name("เที่ยวเย็น");click("บันทึก");check(Profiles.activeName().equals("เที่ยวเย็น"),"rename active profile");String evening=Profiles.active();
             manage();click("ทำสำเนา");name("เที่ยวเสาร์");click("บันทึก");check(Profiles.activeName().equals("เที่ยวเสาร์"),"copy selected");String saturday=Profiles.active();
             test.runOnMainSync(()->Store.prefs(c).edit().putBoolean("enabled",true).apply());selector();click("เที่ยวเย็น");check(Profiles.active().equals(saturday),"live switch waits for confirmation");click("ยกเลิก");check(Profiles.active().equals(saturday),"cancel switch retains profile");selector();click("เที่ยวเย็น");click("เปลี่ยน");check(Profiles.active().equals(evening)&&Store.prefs(c).getBoolean("enabled",false),"confirmed switch keeps auto-open on");

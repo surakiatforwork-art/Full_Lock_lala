@@ -14,12 +14,17 @@ import org.json.*;
 
 public class MainActivity extends Activity {
     static volatile boolean foreground;
+    static volatile boolean historyForeground;
+    private static java.lang.ref.WeakReference<MainActivity> activeActivity=new java.lang.ref.WeakReference<>(null);
     private enum Page { FILTERS, HISTORY, PERMISSIONS, THEME }
     private Page page=Page.FILTERS;
     private int accent,ink,muted;
     private LinearLayout root,body;
     private FrameLayout frame;
     private View drawer;
+    private SwipeBar swipeBar;
+    private PopupWindow profileDropdown;
+    private boolean cancelStopGesture;
     private boolean unwantedExpanded;
     private String pendingExportId;
     private static final int IMPORT_PROFILE=201,EXPORT_PROFILE=202;
@@ -37,11 +42,17 @@ public class MainActivity extends Activity {
         p().registerOnSharedPreferenceChangeListener(updates);render();
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putString("page",page.name());state.putString("pendingExportId",pendingExportId);super.onSaveInstanceState(state);}
-    @Override protected void onStart(){super.onStart();foreground=true;JobListener.refreshFloating();}
-    @Override protected void onResume(){super.onResume();if(!AppIntegrity.trusted(this))return;reconnect();JobListener.refreshFloating();render();}
-    @Override protected void onStop(){foreground=false;JobListener.refreshFloating();super.onStop();}
+    @Override protected void onStart(){super.onStart();foreground=true;historyForeground=page==Page.HISTORY;JobListener.refreshFloating();}
+    @Override protected void onPause(){if(swipeBar!=null)swipeBar.cancelStop();cancelStopGesture=false;if(activeActivity.get()==this)activeActivity.clear();dismissProfiles();super.onPause();}
+    @Override protected void onResume(){super.onResume();if(!AppIntegrity.trusted(this))return;activeActivity=new java.lang.ref.WeakReference<>(this);reconnect();JobListener.refreshFloating();render();}
+    @Override protected void onStop(){foreground=false;historyForeground=false;JobListener.refreshFloating();super.onStop();}
     @Override protected void onDestroy(){p().unregisterOnSharedPreferenceChangeListener(updates);super.onDestroy();}
-    @Override public void onBackPressed(){if(drawer!=null){closeDrawer();return;}if(page!=Page.FILTERS){page=Page.FILTERS;render();return;}super.onBackPressed();}
+    @Override public void onBackPressed(){if(profileDropdown!=null){dismissProfiles();return;}if(swipeBar!=null&&swipeBar.isConfirming()){swipeBar.cancelStop();return;}if(drawer!=null){closeDrawer();return;}if(page!=Page.FILTERS){page=Page.FILTERS;render();return;}super.onBackPressed();}
+    static void cancelPendingStop(){MainActivity activity=activeActivity.get();if(activity!=null&&activity.swipeBar!=null)activity.swipeBar.cancelStop();}
+    @Override public boolean dispatchTouchEvent(MotionEvent event){
+        if(event.getActionMasked()==MotionEvent.ACTION_DOWN){cancelStopGesture=false;if(swipeBar!=null&&swipeBar.isConfirming()&&!swipeBar.confirmationContains(event.getRawX(),event.getRawY())){int[] at=new int[2];swipeBar.getLocationOnScreen(at);cancelStopGesture=event.getRawX()>=at[0]&&event.getRawX()<at[0]+swipeBar.getWidth()&&event.getRawY()>=at[1]&&event.getRawY()<at[1]+swipeBar.getHeight();swipeBar.cancelStop();}}
+        if(cancelStopGesture){if(event.getActionMasked()==MotionEvent.ACTION_UP||event.getActionMasked()==MotionEvent.ACTION_CANCEL)cancelStopGesture=false;return true;}return super.dispatchTouchEvent(event);
+    }
     private TextView label(String value,int size,int color,boolean bold){TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);if(bold)t.setTypeface(null,Typeface.BOLD);return t;}
     private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
     private LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
@@ -49,6 +60,7 @@ public class MainActivity extends Activity {
     private void space(LinearLayout l,int h){l.addView(new View(this),new LinearLayout.LayoutParams(1,dp(h)));}
     private void line(LinearLayout l){View v=new View(this);v.setBackgroundColor(AppTheme.divider(this));l.addView(v,new LinearLayout.LayoutParams(-1,dp(1)));}
     private void render(){
+        if(swipeBar!=null)swipeBar.cancelStop();swipeBar=null;dismissProfiles();historyForeground=foreground&&page==Page.HISTORY;JobListener.refreshFloating();
         accent=AppTheme.accent(this);ink=AppTheme.ink(this);muted=AppTheme.muted(this);drawer=null;
         int systemFlags=AppTheme.inverted(this)?0:View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR|View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
         getWindow().getDecorView().setSystemUiVisibility(systemFlags);getWindow().setStatusBarColor(AppTheme.page(this));getWindow().setNavigationBarColor(AppTheme.surface(this));
@@ -76,7 +88,7 @@ public class MainActivity extends Activity {
             boolean current=p().getBoolean("enabled",false);
             if(!current&&!PermissionSetup.reading(this)){page=Page.PERMISSIONS;render();Toast.makeText(this,"อนุญาตอ่านแจ้งเตือนก่อน",Toast.LENGTH_SHORT).show();return false;}
             p().edit().putBoolean("enabled",!current).apply();reconnect();render();return true;
-        });footer.addView(swipe,new LinearLayout.LayoutParams(-1,dp(60)));root.addView(footer);
+        });swipeBar=swipe;footer.addView(swipe,new LinearLayout.LayoutParams(-1,dp(60)));root.addView(footer);
     }
     private LinearLayout card(String number,String title){
         LinearLayout outer=column();outer.setBackground(AppTheme.background(AppTheme.surface(this),dp(18)));outer.setClipToOutline(true);outer.setElevation(dp(2));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(14);body.addView(outer,lp);
@@ -143,15 +155,23 @@ public class MainActivity extends Activity {
         View theme=item(nav,"◐ ธีม","",()->{page=Page.THEME;render();});theme.setTag("theme-menu");
     }
     private void transitionSettings(LinearLayout nav){
-        TextView expand=label("▾ ความเร็วการกาง–หุบ",13,muted,false);expand.setTag("transition-toggle");pad(expand,0,8,0,8);nav.addView(expand);
-        LinearLayout controls=column();controls.setVisibility(View.GONE);controls.setTag("transition-settings");nav.addView(controls);expand.setOnClickListener(v->{boolean show=controls.getVisibility()!=View.VISIBLE;controls.setVisibility(show?View.VISIBLE:View.GONE);expand.setText((show?"▴ ":"▾ ")+"ความเร็วการกาง–หุบ");});
+        TextView expand=label("▾ ตั้งค่าปุ่มลอย",13,muted,false);expand.setTag("transition-toggle");pad(expand,0,8,0,8);nav.addView(expand);
+        LinearLayout controls=column();controls.setVisibility(View.GONE);controls.setTag("transition-settings");nav.addView(controls);expand.setOnClickListener(v->{boolean show=controls.getVisibility()!=View.VISIBLE;controls.setVisibility(show?View.VISIBLE:View.GONE);expand.setText((show?"▴ ":"▾ ")+"ตั้งค่าปุ่มลอย");});
+        toggle(controls,"แสดงรายการที่เปิดไม่ได้แล้ว",null,"showUnavailableFloating",true);line(controls);controls.addView(label("ความเร็วการกาง–หุบ",12,muted,false));
         int current=Math.max(0,Math.min(1000,p().getInt("transitionMs",200)));TextView value=label(String.format(java.util.Locale.US,"%.2f วินาที",current/1000f),12,ink,false);value.setTag("transition-value");controls.addView(value);
         SeekBar slider=new SeekBar(this);slider.setTag("transition-slider");slider.setContentDescription("เวลากางและหุบปุ่มลอย 0 ถึง 1 วินาที");slider.setMax(100);slider.setProgress(current/10);slider.setThumbTintList(android.content.res.ColorStateList.valueOf(accent));slider.setProgressTintList(android.content.res.ColorStateList.valueOf(accent));controls.addView(slider,new LinearLayout.LayoutParams(-1,dp(34)));slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar bar,int progress,boolean user){value.setText(String.format(java.util.Locale.US,"%.2f วินาที",progress/100f));if(user)p().edit().putInt("transitionMs",progress*10).apply();}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});controls.addView(label("0.00 ทันที                         1.00 ช้า",10,muted,false));
     }
     private void showProfiles(){
-        JSONArray list=Profiles.entries();String[] names=new String[list.length()];int selected=0;for(int i=0;i<list.length();i++){JSONObject item=list.optJSONObject(i);names[i]=item.optString("name");if(item.optString("id").equals(Profiles.active()))selected=i;}
-        dialog(new AlertDialog.Builder(this).setTitle("เลือกโปรไฟล์").setSingleChoiceItems(names,selected,(d,which)->{d.dismiss();requestProfile(list.optJSONObject(which).optString("id"));}).setPositiveButton("เพิ่ม",(d,w)->nameProfile(null,null)).setNeutralButton("จัดการ",(d,w)->manageProfile()).setNegativeButton("นำเข้า .flp",(d,w)->importPicker()));
+        if(profileDropdown!=null){dismissProfiles();return;}View anchor=frame.findViewWithTag("profile-selector");if(anchor==null)return;
+        LinearLayout content=column();content.setTag("profile-dropdown");pad(content,8,8,8,8);content.setBackground(AppTheme.background(AppTheme.surface(this),dp(16)));
+        TextView heading=label("เลือกโปรไฟล์",12,muted,true);pad(heading,12,5,12,8);content.addView(heading);
+        ScrollView scroll=new ScrollView(this);LinearLayout entries=column();scroll.addView(entries);JSONArray list=Profiles.entries();
+        for(int i=0;i<list.length();i++){JSONObject entry=list.optJSONObject(i);String id=entry.optString("id");boolean active=id.equals(Profiles.active());LinearLayout choice=row();choice.setTag("profile-choice-"+id);TextView name=label(entry.optString("name"),15,active?accent:ink,active);name.setMaxLines(2);name.setEllipsize(android.text.TextUtils.TruncateAt.END);choice.addView(name,new LinearLayout.LayoutParams(0,-2,1));if(active)choice.addView(label("✓",18,accent,true));pad(choice,12,12,12,12);if(active)choice.setBackground(AppTheme.background(AppTheme.tint(this),dp(10)));entries.addView(choice,new LinearLayout.LayoutParams(-1,-2));choice.setOnClickListener(v->{dismissProfiles();requestProfile(id);});}
+        content.addView(scroll,new LinearLayout.LayoutParams(-1,Math.min(dp(240),list.length()*dp(56))));line(content);
+        item(content,"เพิ่มโปรไฟล์","＋",()->{dismissProfiles();nameProfile(null,null);});item(content,"จัดการโปรไฟล์","",()->{dismissProfiles();manageProfile();});item(content,"นำเข้า .flp","",()->{dismissProfiles();importPicker();});
+        profileDropdown=new PopupWindow(content,anchor.getWidth(),-2,true);profileDropdown.setBackgroundDrawable(AppTheme.background(AppTheme.surface(this),dp(16)));profileDropdown.setElevation(dp(12));profileDropdown.setOutsideTouchable(true);profileDropdown.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);profileDropdown.setOnDismissListener(()->profileDropdown=null);profileDropdown.showAsDropDown(anchor,0,dp(7));
     }
+    private void dismissProfiles(){if(profileDropdown!=null){PopupWindow window=profileDropdown;profileDropdown=null;window.dismiss();}}
     private void requestProfile(String id){
         if(id.equals(Profiles.active()))return;
         Runnable select=()->{Profiles.select(id);unwantedExpanded=false;render();};
