@@ -158,7 +158,7 @@ public class MainActivity extends Activity {
         nav.addView(label("การอนุญาตสิทธิ์",16,ink,true));space(nav,8);
         for(int i=0;i<PermissionSetup.TITLES.length;i++){final int step=i;item(nav,PermissionSetup.TITLES[i],PermissionSetup.ready(this,i)?"✓":"ตั้งค่า",()->PermissionSetup.open(this,step));}
         item(nav,"ดูคำแนะนำการตั้งค่า","",()->{page=Page.PERMISSIONS;render();});space(nav,12);line(nav);space(nav,12);
-        item(nav,"ลองตัวกรอง","",this::sample);item(nav,"ตรวจการทำงาน","",this::diagnostics);space(nav,15);nav.addView(label("Full Lock "+version(),11,muted,false));space(nav,3);nav.addView(label("Dev by PHANToM",10,muted,false));space(nav,14);line(nav);
+        item(nav,"ลองตัวกรอง","",this::sample);item(nav,"ตรวจการทำงาน","",this::diagnostics);View support=item(nav,"♡ สนับสนุนผู้พัฒนา","Ko-fi ↗",()->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://ko-fi.com/lphantoml")));}catch(ActivityNotFoundException e){Toast.makeText(this,"เปิดลิงก์ไม่ได้",Toast.LENGTH_SHORT).show();}});support.setTag("support-developer");space(nav,15);nav.addView(label("Full Lock "+version(),11,muted,false));space(nav,3);nav.addView(label("Dev by PHANToM",10,muted,false));space(nav,14);line(nav);
         View theme=item(nav,"◐ ธีม","",()->{page=Page.THEME;render();});theme.setTag("theme-menu");
     }
     private void transitionSettings(LinearLayout nav){

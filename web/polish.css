@@ -29,3 +29,5 @@ body{background:#faf9f6}::selection{background:#ffd8bf;color:#272b24}
 }
 @media(max-width:359px){.hero{padding-left:19px;padding-right:19px}.hero h1{font-size:37px}.hero .actions{gap:10px}.hero .button{padding:12px;font-size:11px}.hero .text-link{font-size:10px}.hero-badge{right:6px}.sample{width:220px}.assign-actions{gap:6px}.assign-actions button{font-size:9px}.mobile-dock{left:8px;right:8px;padding-left:12px}.mobile-dock .button{font-size:10px;padding:10px 13px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}.motion-ready .reveal{opacity:1;transform:none}.hero-icon{transform:rotate(-8deg)}}
+
+.support-developer{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px 0 32px;margin-bottom:24px;border-bottom:1px solid var(--line)}.support-developer strong{font-size:1.15rem}.support-developer p{margin:8px 0 0}.support-developer .button{flex-shrink:0;font-size:14px;text-decoration:none}@media(max-width:640px){.support-developer{align-items:flex-start;flex-direction:column;gap:16px}.support-developer .button{width:100%;text-align:center}}
