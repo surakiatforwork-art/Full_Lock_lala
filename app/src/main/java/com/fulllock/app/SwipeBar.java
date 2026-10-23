@@ -11,7 +11,7 @@ import java.util.function.BooleanSupplier;
 
 /** Start on release at the endpoint. Stopping requires a separate confirmation tap. */
 final class SwipeBar extends FrameLayout {
-    private TextView handle;
+    private View handle;
     private final BooleanSupplier commit;
     private final boolean enabled;
     private float downX;
@@ -25,7 +25,7 @@ final class SwipeBar extends FrameLayout {
         confirming=false;removeAllViews();android.graphics.drawable.GradientDrawable background=AppTheme.background(enabled?AppTheme.page(getContext()):AppTheme.accent(getContext()),dp(17));if(enabled)background.setStroke(dp(2),AppTheme.accent(getContext()));setBackground(background);setContentDescription(enabled?"แตะเพื่อหยุด":"ปัดเพื่อเริ่ม");
         TextView label=text(enabled?"แตะเพื่อหยุด":"ปัดเพื่อเริ่ม  ››");if(enabled)label.setTextColor(AppTheme.ink(getContext()));if(!enabled)label.setPadding(dp(50),0,0,0);addView(label,new LayoutParams(-1,-1));
         setOnClickListener(enabled?v->confirmStop():null);
-        if(!enabled){handle=text("→");handle.setTextSize(28);handle.setTextColor(AppTheme.accent(getContext()));handle.setBackground(AppTheme.background(AppTheme.surface(getContext()),dp(12)));handle.setElevation(dp(2));addView(handle,new LayoutParams(dp(48),-1,Gravity.START));}
+        if(!enabled){handle=new ArrowHandle(getContext());handle.setBackground(AppTheme.background(AppTheme.surface(getContext()),dp(12)));handle.setElevation(dp(2));addView(handle,new LayoutParams(dp(48),-1,Gravity.START));}
     }
     private void confirmStop(){
         confirming=true;removeAllViews();setOnClickListener(null);setContentDescription("แตะยืนยันทางขวาเพื่อหยุด แตะที่อื่นเพื่อยกเลิก");
@@ -56,6 +56,12 @@ final class SwipeBar extends FrameLayout {
     }
     @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info){super.onInitializeAccessibilityNodeInfo(info);if(!enabled){info.setClassName(SeekBar.class.getName());info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,"ปัดเพื่อเริ่ม"));}}
     @Override public boolean performAccessibilityAction(int action,Bundle args){if(!enabled&&action==AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)return commit.getAsBoolean();return super.performAccessibilityAction(action,args);}
+    /** Draw around the actual center rather than a font baseline. */
+    private final class ArrowHandle extends View {
+        final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+        ArrowHandle(Context c){super(c);setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);paint.setColor(AppTheme.accent(c));paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(dp(2));paint.setStrokeCap(Paint.Cap.ROUND);paint.setStrokeJoin(Paint.Join.ROUND);}
+        @Override protected void onDraw(Canvas canvas){super.onDraw(canvas);float x=getWidth()/2f,y=getHeight()/2f;Path arrow=new Path();arrow.moveTo(x-dp(8),y);arrow.lineTo(x+dp(8),y);arrow.moveTo(x+dp(2),y-dp(5));arrow.lineTo(x+dp(8),y);arrow.lineTo(x+dp(2),y+dp(5));canvas.drawPath(arrow,paint);}
+    }
     private final class Splash extends View {
         float progress;final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
         Splash(Context c){super(c);setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);}
