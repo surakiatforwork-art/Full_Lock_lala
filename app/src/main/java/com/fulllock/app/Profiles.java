@@ -33,5 +33,14 @@ final class Profiles {
     static synchronized String create(String name,String source){if(named(name)!=null)throw new IllegalArgumentException("ชื่อนี้มีอยู่แล้ว");JSONArray list=entries();if(list.length()>=50)throw new IllegalArgumentException("เก็บได้สูงสุด 50 โปรไฟล์");String id=UUID.randomUUID().toString();Map<String,Object> values=source==null?ProfileFile.DEFAULTS:data(get(source)).values;list.put(entry(id,new ProfileFile.Data(name,values)));prefs.edit().putString(LIST,list.toString()).apply();return id;}
     static synchronized void rename(String id,String name){String duplicate=named(name);if(duplicate!=null&&!duplicate.equals(id))throw new IllegalArgumentException("ชื่อนี้มีอยู่แล้ว");JSONArray list=entries();int index=find(list,id);if(index<0)throw new IllegalArgumentException("ไม่พบโปรไฟล์");try{JSONObject item=list.getJSONObject(index);list.put(index,entry(id,new ProfileFile.Data(name,data(item).values)));prefs.edit().putString(LIST,list.toString()).apply();}catch(JSONException e){throw new IllegalArgumentException(e);}}
     static synchronized void delete(String id){JSONArray list=entries();if(list.length()<=1)throw new IllegalArgumentException("ต้องมีอย่างน้อย 1 โปรไฟล์");int index=find(list,id);if(index<0)return;list.remove(index);if(active().equals(id)){JSONObject next=list.optJSONObject(Math.min(index,list.length()-1));apply(list,next.optString("id"),data(next));}else prefs.edit().putString(LIST,list.toString()).apply();}
+    static synchronized void deleteMany(Set<String> selected){
+        if(selected.isEmpty())throw new IllegalArgumentException("เลือกโปรไฟล์ที่ต้องการลบก่อน");
+        JSONArray current=entries(),remaining=new JSONArray();Set<String> found=new HashSet<>();
+        for(int i=0;i<current.length();i++){JSONObject item=current.optJSONObject(i);String id=item.optString("id");if(selected.contains(id))found.add(id);else remaining.put(item);}
+        if(!found.equals(selected))throw new IllegalArgumentException("รายการโปรไฟล์เปลี่ยนแล้ว กรุณาเลือกใหม่");
+        if(remaining.length()==0)throw new IllegalArgumentException("ต้องเหลืออย่างน้อย 1 โปรไฟล์");
+        if(selected.contains(active())){JSONObject next=remaining.optJSONObject(0);apply(remaining,next.optString("id"),data(next));}
+        else prefs.edit().putString(LIST,remaining.toString()).apply();
+    }
     static synchronized String install(ProfileFile.Data imported,boolean overwrite){JSONArray list=entries();String id=named(imported.name);if(id!=null&&!overwrite)throw new IllegalArgumentException("โปรไฟล์นี้มีอยู่แล้ว");if(id==null){if(list.length()>=50)throw new IllegalArgumentException("เก็บได้สูงสุด 50 โปรไฟล์");id=UUID.randomUUID().toString();list.put(entry(id,imported));}else try{list.put(find(list,id),entry(id,imported));}catch(JSONException e){throw new IllegalArgumentException(e);}apply(list,id,imported);return id;}
 }

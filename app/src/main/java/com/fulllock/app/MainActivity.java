@@ -16,7 +16,7 @@ public class MainActivity extends Activity {
     static volatile boolean foreground;
     static volatile boolean historyForeground;
     private static java.lang.ref.WeakReference<MainActivity> activeActivity=new java.lang.ref.WeakReference<>(null);
-    private enum Page { FILTERS, HISTORY, PERMISSIONS, THEME }
+    private enum Page { FILTERS, HISTORY, PERMISSIONS, THEME, PROFILES }
     private Page page=Page.FILTERS;
     private int accent,ink,muted;
     private LinearLayout root,body;
@@ -26,6 +26,11 @@ public class MainActivity extends Activity {
     private PopupWindow profileDropdown;
     private boolean cancelStopGesture;
     private boolean unwantedExpanded;
+    private EditText profileNameEditor;
+    private String editingProfileId;
+    private boolean profileDeleteMode;
+    private final java.util.Set<String> selectedProfileIds=new java.util.LinkedHashSet<>();
+    private TextView profileDeleteConfirm,profileDeleteCount;
     private String pendingExportId;
     private static final int IMPORT_PROFILE=201,EXPORT_PROFILE=202;
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener updates=(prefs,key)->{
@@ -43,11 +48,11 @@ public class MainActivity extends Activity {
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putString("page",page.name());state.putString("pendingExportId",pendingExportId);super.onSaveInstanceState(state);}
     @Override protected void onStart(){super.onStart();foreground=true;historyForeground=page==Page.HISTORY;JobListener.refreshFloating();}
-    @Override protected void onPause(){if(swipeBar!=null)swipeBar.cancelStop();cancelStopGesture=false;if(activeActivity.get()==this)activeActivity.clear();dismissProfiles();super.onPause();}
+    @Override protected void onPause(){if(profileNameEditor!=null)saveInlineProfileName(false);if(swipeBar!=null)swipeBar.cancelStop();cancelStopGesture=false;if(activeActivity.get()==this)activeActivity.clear();dismissProfiles();super.onPause();}
     @Override protected void onResume(){super.onResume();if(!AppIntegrity.trusted(this))return;activeActivity=new java.lang.ref.WeakReference<>(this);reconnect();JobListener.refreshFloating();render();}
     @Override protected void onStop(){foreground=false;historyForeground=false;JobListener.refreshFloating();super.onStop();}
     @Override protected void onDestroy(){p().unregisterOnSharedPreferenceChangeListener(updates);super.onDestroy();}
-    @Override public void onBackPressed(){if(profileDropdown!=null){dismissProfiles();return;}if(swipeBar!=null&&swipeBar.isConfirming()){swipeBar.cancelStop();return;}if(drawer!=null){closeDrawer();return;}if(page!=Page.FILTERS){page=Page.FILTERS;render();return;}super.onBackPressed();}
+    @Override public void onBackPressed(){if(profileNameEditor!=null){profileNameEditor=null;editingProfileId=null;render();return;}if(page==Page.PROFILES&&profileDeleteMode){profileDeleteMode=false;selectedProfileIds.clear();render();return;}if(profileDropdown!=null){dismissProfiles();return;}if(swipeBar!=null&&swipeBar.isConfirming()){swipeBar.cancelStop();return;}if(drawer!=null){closeDrawer();return;}if(page!=Page.FILTERS){page=Page.FILTERS;render();return;}super.onBackPressed();}
     static void cancelPendingStop(){MainActivity activity=activeActivity.get();if(activity!=null&&activity.swipeBar!=null)activity.swipeBar.cancelStop();}
     @Override public boolean dispatchTouchEvent(MotionEvent event){
         if(event.getActionMasked()==MotionEvent.ACTION_DOWN){cancelStopGesture=false;if(swipeBar!=null&&swipeBar.isConfirming()&&!swipeBar.confirmationContains(event.getRawX(),event.getRawY())){int[] at=new int[2];swipeBar.getLocationOnScreen(at);cancelStopGesture=event.getRawX()>=at[0]&&event.getRawX()<at[0]+swipeBar.getWidth()&&event.getRawY()>=at[1]&&event.getRawY()<at[1]+swipeBar.getHeight();swipeBar.cancelStop();}}
@@ -60,6 +65,7 @@ public class MainActivity extends Activity {
     private void space(LinearLayout l,int h){l.addView(new View(this),new LinearLayout.LayoutParams(1,dp(h)));}
     private void line(LinearLayout l){View v=new View(this);v.setBackgroundColor(AppTheme.divider(this));l.addView(v,new LinearLayout.LayoutParams(-1,dp(1)));}
     private void render(){
+        profileNameEditor=null;editingProfileId=null;profileDeleteConfirm=null;profileDeleteCount=null;
         if(swipeBar!=null)swipeBar.cancelStop();swipeBar=null;dismissProfiles();historyForeground=foreground&&page==Page.HISTORY;JobListener.refreshFloating();
         accent=AppTheme.accent(this);ink=AppTheme.ink(this);muted=AppTheme.muted(this);drawer=null;
         int systemFlags=AppTheme.inverted(this)?0:View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR|View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
@@ -70,14 +76,15 @@ public class MainActivity extends Activity {
         int on=AppTheme.onAccent(this);LinearLayout toolbar=row();TextView menu=label("☰",28,on,false);pad(menu,0,0,17,0);menu.setContentDescription("เปิดเมนู");menu.setTag("open-menu");menu.setOnClickListener(v->showDrawer());toolbar.addView(menu);
         TextView brand=label("FULL LOCK",17,on,true);brand.setGravity(Gravity.CENTER_VERTICAL);brand.setLetterSpacing(.10f);toolbar.addView(brand,new LinearLayout.LayoutParams(0,dp(48),1));
         String status=p().getBoolean("enabled",false)?"● อัตโนมัติ":"● อ่านงาน";toolbar.addView(label(status,12,on,false));header.addView(toolbar);space(header,13);
-        String title=page==Page.HISTORY?"ประวัติงาน":page==Page.THEME?"ธีม":page==Page.PERMISSIONS?(p().getBoolean("permissionsReviewed",false)?"การอนุญาตสิทธิ์":"เตรียมใช้งาน"):"ตัวกรองงาน";
+        String title=page==Page.PROFILES?"จัดการโปรไฟล์":page==Page.HISTORY?"ประวัติงาน":page==Page.THEME?"ธีม":page==Page.PERMISSIONS?(p().getBoolean("permissionsReviewed",false)?"การอนุญาตสิทธิ์":"เตรียมใช้งาน"):"ตัวกรองงาน";
         header.addView(label(title,27,on,true));space(header,4);
-        String subtitle=page==Page.HISTORY?"ดูงานที่เข้าและผลการเลือก":page==Page.THEME?"เลือกสีในแบบของคุณ":page==Page.PERMISSIONS?"เลือกสิ่งที่ต้องการให้แอปช่วย":"เลือกงานที่ใช่ แล้วปัดรับด้วยตัวคุณเอง";
+        String subtitle=page==Page.PROFILES?"เพิ่ม นำเข้า และจัดโปรไฟล์ของคุณ":page==Page.HISTORY?"ดูงานที่เข้าและผลการเลือก":page==Page.THEME?"เลือกสีในแบบของคุณ":page==Page.PERMISSIONS?"เลือกสิ่งที่ต้องการให้แอปช่วย":"เลือกงานที่ใช่ แล้วปัดรับด้วยตัวคุณเอง";
         header.addView(label(subtitle,14,on,false));
-        if(page==Page.FILTERS){space(header,9);TextView profile=label("โปรไฟล์: "+Profiles.activeName()+" ▾",14,on,true);profile.setTag("profile-selector");profile.setMaxLines(2);profile.setEllipsize(android.text.TextUtils.TruncateAt.END);pad(profile,10,8,10,8);profile.setBackground(AppTheme.background(AppTheme.blend(accent,on,.12f),dp(10)));profile.setOnClickListener(v->showProfiles());header.addView(profile,new LinearLayout.LayoutParams(-1,-2));}
+        if(page==Page.FILTERS)profileHeader(header,on);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));body=column();pad(body,16,14,16,16);scroll.addView(body);
-        switch(page){case HISTORY:historyBody();break;case THEME:themeBody();break;case PERMISSIONS:permissionsBody();break;default:settingsBody();}
+        switch(page){case PROFILES:profilesBody();break;case HISTORY:historyBody();break;case THEME:themeBody();break;case PERMISSIONS:permissionsBody();break;default:settingsBody();}
         if(page==Page.FILTERS||page==Page.HISTORY)footer();
+        if(page==Page.PROFILES&&profileDeleteMode)profileDeleteFooter();
         setContentView(frame);
     }
     private void footer(){
@@ -162,13 +169,11 @@ public class MainActivity extends Activity {
         SeekBar slider=new SeekBar(this);slider.setTag("transition-slider");slider.setContentDescription("เวลากางและหุบปุ่มลอย 0 ถึง 1 วินาที");slider.setMax(100);slider.setProgress(current/10);slider.setThumbTintList(android.content.res.ColorStateList.valueOf(accent));slider.setProgressTintList(android.content.res.ColorStateList.valueOf(accent));controls.addView(slider,new LinearLayout.LayoutParams(-1,dp(34)));slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar bar,int progress,boolean user){value.setText(String.format(java.util.Locale.US,"%.2f วินาที",progress/100f));if(user)p().edit().putInt("transitionMs",progress*10).apply();}public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}});controls.addView(label("0.00 ทันที                         1.00 ช้า",10,muted,false));
     }
     private void showProfiles(){
-        if(profileDropdown!=null){dismissProfiles();return;}View anchor=frame.findViewWithTag("profile-selector");if(anchor==null)return;
+        if(profileDropdown!=null){dismissProfiles();return;}View anchor=frame.findViewWithTag("profile-dropdown-anchor");if(anchor==null)return;
         LinearLayout content=column();content.setTag("profile-dropdown");pad(content,8,8,8,8);content.setBackground(AppTheme.background(AppTheme.surface(this),dp(16)));
-        TextView heading=label("เลือกโปรไฟล์",12,muted,true);pad(heading,12,5,12,8);content.addView(heading);
         ScrollView scroll=new ScrollView(this);LinearLayout entries=column();scroll.addView(entries);JSONArray list=Profiles.entries();
         for(int i=0;i<list.length();i++){JSONObject entry=list.optJSONObject(i);String id=entry.optString("id");boolean active=id.equals(Profiles.active());LinearLayout choice=row();choice.setTag("profile-choice-"+id);TextView name=label(entry.optString("name"),15,active?accent:ink,active);name.setMaxLines(2);name.setEllipsize(android.text.TextUtils.TruncateAt.END);choice.addView(name,new LinearLayout.LayoutParams(0,-2,1));if(active)choice.addView(label("✓",18,accent,true));pad(choice,12,12,12,12);if(active)choice.setBackground(AppTheme.background(AppTheme.tint(this),dp(10)));entries.addView(choice,new LinearLayout.LayoutParams(-1,-2));choice.setOnClickListener(v->{dismissProfiles();requestProfile(id);});}
-        content.addView(scroll,new LinearLayout.LayoutParams(-1,Math.min(dp(240),list.length()*dp(56))));line(content);
-        item(content,"เพิ่มโปรไฟล์","＋",()->{dismissProfiles();nameProfile(null,null);});item(content,"จัดการโปรไฟล์","",()->{dismissProfiles();manageProfile();});item(content,"นำเข้า .flp","",()->{dismissProfiles();importPicker();});
+        content.addView(scroll,new LinearLayout.LayoutParams(-1,Math.min(dp(280),list.length()*dp(56))));
         profileDropdown=new PopupWindow(content,anchor.getWidth(),-2,true);profileDropdown.setBackgroundDrawable(AppTheme.background(AppTheme.surface(this),dp(16)));profileDropdown.setElevation(dp(12));profileDropdown.setOutsideTouchable(true);profileDropdown.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);profileDropdown.setOnDismissListener(()->profileDropdown=null);profileDropdown.showAsDropDown(anchor,0,dp(7));
     }
     private void dismissProfiles(){if(profileDropdown!=null){PopupWindow window=profileDropdown;profileDropdown=null;window.dismiss();}}
@@ -177,13 +182,45 @@ public class MainActivity extends Activity {
         Runnable select=()->{Profiles.select(id);unwantedExpanded=false;render();};
         if(p().getBoolean("enabled",false))dialog(new AlertDialog.Builder(this).setTitle("เปลี่ยนโปรไฟล์?").setMessage("กำลังเปิดงานอัตโนมัติ เปลี่ยนเป็น “"+Profiles.get(id).optString("name")+"” หรือไม่?\nเงื่อนไขใหม่จะใช้กับงานที่เข้าหลังเปลี่ยน").setPositiveButton("เปลี่ยน",(d,w)->select.run()).setNegativeButton("ยกเลิก",null));else select.run();
     }
-    private void manageProfile(){
-        String id=Profiles.active();dialog(new AlertDialog.Builder(this).setTitle(Profiles.activeName()).setItems(new String[]{"เปลี่ยนชื่อ","ทำสำเนา","ส่งออก .flp","ลบโปรไฟล์"},(d,index)->{if(index==0)nameProfile(id,null);else if(index==1)nameProfile(null,id);else if(index==2)exportPicker(id);else deleteProfile(id);}).setNegativeButton("ปิด",null));
+    private void manageProfile(){dismissProfiles();page=Page.PROFILES;profileDeleteMode=false;selectedProfileIds.clear();render();}
+    private void profileHeader(LinearLayout header,int on){
+        space(header,9);LinearLayout bar=row();LinearLayout selection=row();selection.setTag("profile-dropdown-anchor");selection.setBackground(AppTheme.background(AppTheme.blend(accent,on,.12f),dp(10)));
+        FrameLayout holder=new FrameLayout(this);holder.setTag("profile-name-holder");TextView name=label(Profiles.activeName(),14,on,true);name.setTag("profile-name-display");name.setContentDescription("เปลี่ยนชื่อโปรไฟล์ "+Profiles.activeName());name.setMaxLines(2);name.setEllipsize(android.text.TextUtils.TruncateAt.END);pad(name,10,10,0,10);holder.addView(name,new FrameLayout.LayoutParams(-1,-2,Gravity.CENTER_VERTICAL));name.setOnClickListener(v->editInlineProfileName(holder,on));selection.addView(holder,new LinearLayout.LayoutParams(0,dp(48),1));
+        TextView choose=label("▾",22,on,true);choose.setTag("profile-selector");choose.setContentDescription("เลือกโปรไฟล์");choose.setGravity(Gravity.CENTER);choose.setOnClickListener(v->{if(saveInlineProfileName(true))showProfiles();});selection.addView(choose,new LinearLayout.LayoutParams(dp(44),dp(48)));bar.addView(selection,new LinearLayout.LayoutParams(0,-2,1));
+        TextView manage=label("จัดการ",13,on,true);manage.setTag("manage-profiles");manage.setContentDescription("จัดการโปรไฟล์");manage.setGravity(Gravity.CENTER);manage.setBackground(AppTheme.background(AppTheme.blend(accent,on,.20f),dp(10)));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(66),dp(48));lp.leftMargin=dp(8);bar.addView(manage,lp);manage.setOnClickListener(v->{if(saveInlineProfileName(true))manageProfile();});header.addView(bar);
+    }
+    private void editInlineProfileName(FrameLayout holder,int on){
+        if(profileNameEditor!=null)return;dismissProfiles();editingProfileId=Profiles.active();LinearLayout edit=row();EditText name=new EditText(this);profileNameEditor=name;name.setTag("profile-rename-input");name.setSingleLine(true);name.setText(Profiles.activeName());name.setTextColor(on);name.setTextSize(14);name.setSelectAllOnFocus(true);name.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);name.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);name.setBackgroundTintList(android.content.res.ColorStateList.valueOf(on));pad(name,7,0,0,0);edit.addView(name,new LinearLayout.LayoutParams(0,dp(46),1));
+        TextView save=label("✓",20,on,true);save.setTag("profile-rename-save");save.setContentDescription("บันทึกชื่อโปรไฟล์");save.setGravity(Gravity.CENTER);edit.addView(save,new LinearLayout.LayoutParams(dp(38),dp(46)));save.setOnClickListener(v->saveInlineProfileName(true));name.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){saveInlineProfileName(true);return true;}return false;});holder.removeAllViews();holder.addView(edit,new FrameLayout.LayoutParams(-1,-1));name.requestFocus();name.post(()->getSystemService(android.view.inputmethod.InputMethodManager.class).showSoftInput(name,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT));
+    }
+    private boolean saveInlineProfileName(boolean repaint){
+        if(profileNameEditor==null)return true;EditText editor=profileNameEditor;
+        try{Profiles.rename(editingProfileId,editor.getText().toString());profileNameEditor=null;editingProfileId=null;getSystemService(android.view.inputmethod.InputMethodManager.class).hideSoftInputFromWindow(editor.getWindowToken(),0);if(repaint)render();return true;}
+        catch(IllegalArgumentException error){if(repaint){editor.setError(error.getMessage());editor.requestFocus();}else{profileNameEditor=null;editingProfileId=null;}return false;}
+    }
+    private void profilesBody(){
+        LinearLayout top=card(null,null);TextView back=label("‹ กลับตัวกรอง",14,accent,true);back.setTag("profile-manager-back");pad(back,0,4,0,12);back.setOnClickListener(v->{profileDeleteMode=false;selectedProfileIds.clear();page=Page.FILTERS;render();});top.addView(back);
+        LinearLayout actions=row();String[] titles={"＋ เพิ่ม","นำเข้า .flp",profileDeleteMode?"ยกเลิก":"ลบโปรไฟล์"};String[] tags={"profile-add","profile-import","profile-delete-mode"};for(int i=0;i<titles.length;i++){final int action=i;TextView button=label(titles[i],13,i==2?ink:AppTheme.onAccent(this),true);button.setTag(tags[i]);button.setGravity(Gravity.CENTER);button.setBackground(AppTheme.background(i==2?AppTheme.tint(this):accent,dp(9)));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(46),1);if(i>0)lp.leftMargin=dp(7);actions.addView(button,lp);button.setOnClickListener(v->{if(action==0)nameProfile(null,null);else if(action==1)importPicker();else{profileDeleteMode=!profileDeleteMode;selectedProfileIds.clear();render();}});}top.addView(actions);space(top,10);top.addView(label(profileDeleteMode?"เลือกโปรไฟล์ที่ต้องการลบได้หลายรายการ":"แตะชื่อบนหน้าตัวกรองเพื่อเปลี่ยนชื่อโปรไฟล์",12,muted,false));
+        JSONArray list=Profiles.entries();java.util.Set<String> known=new java.util.HashSet<>();for(int i=0;i<list.length();i++)known.add(list.optJSONObject(i).optString("id"));selectedProfileIds.retainAll(known);
+        for(int i=0;i<list.length();i++){JSONObject entry=list.optJSONObject(i);String id=entry.optString("id");LinearLayout card=card(null,null),heading=row();TextView name=label(entry.optString("name"),16,ink,true);heading.addView(name,new LinearLayout.LayoutParams(0,-2,1));if(id.equals(Profiles.active()))heading.addView(label("ใช้อยู่",11,accent,true));
+            if(profileDeleteMode){CheckBox selected=new CheckBox(this);selected.setTag("delete-profile-"+id);selected.setContentDescription("เลือกเพื่อลบ "+entry.optString("name"));selected.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));selected.setChecked(selectedProfileIds.contains(id));heading.addView(selected);selected.setOnCheckedChangeListener((button,checked)->{if(checked)selectedProfileIds.add(id);else selectedProfileIds.remove(id);updateDeleteSelection();});card.setOnClickListener(v->selected.setChecked(!selected.isChecked()));}
+            card.addView(heading);JSONObject values=entry.optJSONObject("values");if(values!=null){space(card,6);card.addView(label(values.optBoolean("price",true)?"฿"+values.optString("min","100")+" – ฿"+values.optString("max","2000"):"ทุกช่วงราคา",12,muted,false));}
+            if(!profileDeleteMode){space(card,8);LinearLayout options=row();TextView copy=label("ทำสำเนา",12,accent,true);copy.setTag("profile-copy-"+id);pad(copy,0,10,20,8);copy.setOnClickListener(v->nameProfile(null,id));options.addView(copy);TextView export=label("ส่งออก .flp",12,accent,true);export.setTag("profile-export-"+id);pad(export,0,10,15,8);export.setOnClickListener(v->exportPicker(id));options.addView(export);card.addView(options);}
+        }
+    }
+    private void profileDeleteFooter(){
+        LinearLayout footer=column();footer.setBackgroundColor(AppTheme.surface(this));pad(footer,16,10,16,12);profileDeleteCount=label("",12,muted,false);footer.addView(profileDeleteCount);space(footer,7);profileDeleteConfirm=action("ยืนยันรายการที่เลือก",this::confirmBulkDelete);profileDeleteConfirm.setTag("profile-delete-confirm");footer.addView(profileDeleteConfirm,new LinearLayout.LayoutParams(-1,dp(48)));root.addView(footer);updateDeleteSelection();
+    }
+    private void updateDeleteSelection(){if(profileDeleteCount==null)return;int count=selectedProfileIds.size();profileDeleteCount.setText("เลือกแล้ว "+count+" รายการ · ต้องเหลืออย่างน้อย 1 โปรไฟล์");boolean allowed=count>0&&count<Profiles.entries().length();profileDeleteConfirm.setEnabled(allowed);profileDeleteConfirm.setAlpha(allowed?1f:.45f);}
+    private void confirmBulkDelete(){
+        if(selectedProfileIds.isEmpty())return;java.util.Set<String> chosen=new java.util.LinkedHashSet<>(selectedProfileIds);if(chosen.size()>=Profiles.entries().length()){Toast.makeText(this,"ต้องเหลืออย่างน้อย 1 โปรไฟล์",Toast.LENGTH_SHORT).show();return;}
+        String message="โปรไฟล์ที่ลบจะนำกลับมาไม่ได้แล้ว\nต้องการลบ "+chosen.size()+" โปรไฟล์หรือไม่?";if(chosen.contains(Profiles.active()))message+="\nแอปจะเลือกโปรไฟล์อื่นแทน"+(p().getBoolean("enabled",false)?" และใช้เงื่อนไขใหม่กับงานที่เข้าหลังลบ":"");
+        dialog(new AlertDialog.Builder(this).setTitle("ลบโปรไฟล์ที่เลือก?").setMessage(message).setPositiveButton("ยืนยันลบ",(d,w)->{try{Profiles.deleteMany(chosen);profileDeleteMode=false;selectedProfileIds.clear();render();Toast.makeText(this,"ลบโปรไฟล์แล้ว",Toast.LENGTH_SHORT).show();}catch(IllegalArgumentException error){Toast.makeText(this,error.getMessage(),Toast.LENGTH_SHORT).show();render();}}).setNegativeButton("ไม่ลบ",null));
     }
     private void nameProfile(String rename,String copy){
         String initial=rename!=null?Profiles.get(rename).optString("name"):copy!=null?Profiles.get(copy).optString("name")+" สำเนา":"";EditText name=input(initial,1);name.setHint("ชื่อโปรไฟล์");name.setTag("profile-name-input");
         AlertDialog d=dialog(new AlertDialog.Builder(this).setTitle(rename!=null?"เปลี่ยนชื่อโปรไฟล์":copy!=null?"ทำสำเนาโปรไฟล์":"เพิ่มโปรไฟล์").setView(name).setPositiveButton("บันทึก",null).setNegativeButton("ยกเลิก",null));
-        d.getButton(-1).setOnClickListener(v->{try{if(rename!=null){Profiles.rename(rename,name.getText().toString());d.dismiss();render();}else{String id=Profiles.create(name.getText().toString(),copy);d.dismiss();requestProfile(id);}}catch(IllegalArgumentException e){name.setError(e.getMessage());}});
+        d.getButton(-1).setOnClickListener(v->{try{if(rename!=null){Profiles.rename(rename,name.getText().toString());d.dismiss();render();}else{String id=Profiles.create(name.getText().toString(),copy);d.dismiss();render();requestProfile(id);}}catch(IllegalArgumentException e){name.setError(e.getMessage());}});
     }
     private void deleteProfile(String id){
         if(Profiles.entries().length()==1){Toast.makeText(this,"ต้องมีอย่างน้อย 1 โปรไฟล์",Toast.LENGTH_SHORT).show();return;}
