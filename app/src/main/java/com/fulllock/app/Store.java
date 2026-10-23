@@ -8,6 +8,8 @@ final class Store {
     static android.content.SharedPreferences prefs(Context c) { return c.getSharedPreferences("settings", Context.MODE_PRIVATE); }
     static String rejection(Context c, JobParser.Job job) {
         var p = prefs(c);
+        if(p.getBoolean("excludeOriginOn",false)&&JobParser.areaMatches(job.origin(),p.getString("excludedOrigins","")))return "ต้นทางที่ไม่ต้องการ";
+        if(p.getBoolean("excludeDestOn",false)&&JobParser.areaMatches(job.destination(),p.getString("excludedDestinations","")))return "ปลายทางที่ไม่ต้องการ";
         java.util.List<String> reasons = new java.util.ArrayList<>();
         if (p.getBoolean("price", true)) {
             BigDecimal value = job.price(p.getInt("formula", 0), p.getInt("fee", 20));

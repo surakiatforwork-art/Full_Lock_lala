@@ -10,7 +10,7 @@ import java.util.*;
 /** Emulator-only checks. No tests or synthetic notifications are shipped in the app APK. */
 public class OverlayChecks extends Instrumentation {
     private int checks;
-    private boolean preview,extraOnly;
+    private boolean preview,extraOnly,profilesOnly,profileModelOnly;
     private FloatingJobView view;
     private Map<String,?> saved;
     private BroadcastReceiver probe;
@@ -75,8 +75,10 @@ public class OverlayChecks extends Instrumentation {
     private void shell(String command)throws Exception {
         try(android.os.ParcelFileDescriptor fd=getUiAutomation().executeShellCommand(command);java.io.InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)){byte[] buffer=new byte[1024];while(input.read(buffer)!=-1){} }
     }
-    @Override public void onCreate(Bundle args){super.onCreate(args);preview=args!=null&&"true".equals(args.getString("preview"));extraOnly=args!=null&&"true".equals(args.getString("extraOnly"));start();}
+    @Override public void onCreate(Bundle args){super.onCreate(args);preview=args!=null&&"true".equals(args.getString("preview"));extraOnly=args!=null&&"true".equals(args.getString("extraOnly"));profilesOnly=args!=null&&"true".equals(args.getString("profilesOnly"));profileModelOnly=args!=null&&"true".equals(args.getString("profileModelOnly"));start();}
+    private void runProfiles(){Bundle result=new Bundle();int code=Activity.RESULT_OK;Map<String,?> saved=Store.prefs(getTargetContext()).getAll();try{int model=new ProfileChecks(this).run();int ui=profileModelOnly?0:new ProfileUiChecks(this).run();result.putString("stream","ProfileChecks: "+model+" checks passed\nProfileUiChecks: "+ui+" checks passed\n");}catch(Throwable e){code=Activity.RESULT_CANCELED;result.putString("stream","Profile checks failed: "+e+"\n");}finally{runOnMainSync(()->{var edit=Store.prefs(getTargetContext()).edit().clear();for(var entry:saved.entrySet()){Object value=entry.getValue();if(value instanceof String)edit.putString(entry.getKey(),(String)value);else if(value instanceof Boolean)edit.putBoolean(entry.getKey(),(Boolean)value);else if(value instanceof Integer)edit.putInt(entry.getKey(),(Integer)value);else if(value instanceof Long)edit.putLong(entry.getKey(),(Long)value);else if(value instanceof Float)edit.putFloat(entry.getKey(),(Float)value);}edit.apply();});}finish(code,result);}
     @Override public void onStart(){
+        if(profilesOnly){runProfiles();return;}
         Bundle result=new Bundle();int code=Activity.RESULT_OK;List<String> selected=new ArrayList<>();
         try{
             main(()->android.service.notification.NotificationListenerService.requestRebind(new ComponentName(getTargetContext(),JobListener.class)));
@@ -84,7 +86,7 @@ public class OverlayChecks extends Instrumentation {
             if(!JobListener.connected){shell("cmd notification disallow_listener com.fulllock.app/com.fulllock.app.JobListener");shell("cmd notification allow_listener com.fulllock.app/com.fulllock.app.JobListener");}
             for(int i=0;i<80&&!JobListener.connected;i++)Thread.sleep(250);
             main(()->{
-                check(service()!=null&&JobListener.connected,"service connected");var p=Store.prefs(getTargetContext());saved=p.getAll();p.edit().putBoolean("enabled",false).putBoolean("floatingEnabled",false).putInt("floatX",8).putInt("floatY",260).apply();
+                check(service()!=null&&JobListener.connected,"service connected");var p=Store.prefs(getTargetContext());saved=p.getAll();p.edit().putInt("transitionMs",200).putBoolean("enabled",false).putBoolean("floatingEnabled",false).putInt("floatX",8).putInt("floatY",260).apply();
                 check(!JobListener.floatingVisible(),"FAB switch hides service window");
                 view=new FloatingJobView(getTargetContext(),entry->selected.add(entry.id));view.show();check(view.visible(),"FAB visible");
                 WindowManager.LayoutParams fp=(WindowManager.LayoutParams)field(view,"fabParams");check(fp.width<=Math.round(48*getTargetContext().getResources().getDisplayMetrics().density),"compact 48dp FAB");
@@ -95,8 +97,8 @@ public class OverlayChecks extends Instrumentation {
             if(!extraOnly){
             Thread.sleep(3400);
             main(()->{check(view.model.mode==FloatingJobs.Mode.COLLAPSED,"preview closes after 3 seconds");check(view.model.unread==5,"preview does not mark read");view.toggle();check(view.model.unread==0,"opening FAB marks read");check(rows().getChildCount()==5,"pinned list five items");view.offer(item(6));check(view.model.mode==FloatingJobs.Mode.PINNED,"new item preserves pinned");check(view.model.items.get(0).id.equals(item(6).id),"newest first");check(rows().getChildCount()==6,"six jobs retained");check(view.model.unread==0,"visible new item read");
-                LinearLayout row=(LinearLayout)rows().getChildAt(0);LinearLayout route=(LinearLayout)row.getChildAt(0);
-                check(((TextView)route.getChildAt(0)).getTypeface().isBold(),"route bold");check(((TextView)row.getChildAt(1)).getTypeface().isBold(),"type bold");check(((TextView)row.getChildAt(2)).getTypeface().isBold(),"fare tip bold");check(route.getChildCount()==2&&((TextView)route.getChildAt(1)).getText().toString().equals("✓"),"matching checkmark");check(row.getChildCount()==3,"no rejection reason in panel");
+                LinearLayout row=(LinearLayout)rows().getChildAt(0);LinearLayout route=(LinearLayout)row.getChildAt(1);
+                check(((TextView)route.getChildAt(0)).getTypeface().isBold(),"route bold");check(((TextView)row.getChildAt(0)).getTypeface().isBold(),"type bold");check(((TextView)row.getChildAt(2)).getTypeface().isBold(),"fare tip bold");check(route.getChildCount()==2&&((TextView)route.getChildAt(1)).getText().toString().equals("✓"),"matching checkmark");check(row.getChildCount()==3,"no rejection reason in panel");
             });
             capture("fulllock-fab-left.png");Thread.sleep(3200);
             View[] targetRow=new View[1];main(()->targetRow[0]=rows().getChildAt(0));tap(targetRow[0]);main(()->{check(selected.size()==1,"real tap opens row callback");check(view.model.mode==FloatingJobs.Mode.PINNED,"inside tap does not collapse panel");selected.clear();});
@@ -117,7 +119,7 @@ public class OverlayChecks extends Instrumentation {
             }
             main(()->{for(int i=11;i<=21;i++)view.offer(item(i));view.toggle();check(rows().getChildCount()==10,"ten retained rows");});
             waitForIdleSync();Thread.sleep(600);
-            main(()->{LinearLayout panel=(LinearLayout)field(view,"panel");ScrollView scroll=(ScrollView)panel.getChildAt(0);check(panel.getChildCount()==1,"no header or close button");check(((android.graphics.drawable.ColorDrawable)panel.getBackground()).getColor()==android.graphics.Color.TRANSPARENT,"transparent panel");float ratio=scroll.getHeight()/(float)(rows().getChildAt(0).getHeight()+Math.round(4*getTargetContext().getResources().getDisplayMetrics().density));check(ratio>3.4f&&ratio<3.6f,"3.5-row viewport");LinearLayout first=(LinearLayout)rows().getChildAt(0);check(((android.graphics.drawable.GradientDrawable)first.getBackground()).getColor().getDefaultColor()==AppTheme.jobColor(getTargetContext(),item(21).job),"advance color complementary");LinearLayout route=(LinearLayout)((LinearLayout)rows().getChildAt(1)).getChildAt(0);check(((TextView)route.getChildAt(1)).getTextSize()/getTargetContext().getResources().getDisplayMetrics().scaledDensity>=28,"large matching mark");scroll.fullScroll(View.FOCUS_DOWN);});
+            main(()->{LinearLayout panel=(LinearLayout)field(view,"panel");ScrollView scroll=(ScrollView)panel.getChildAt(0);check(panel.getChildCount()==1,"no header or close button");check(((android.graphics.drawable.ColorDrawable)panel.getBackground()).getColor()==android.graphics.Color.TRANSPARENT,"transparent panel");float ratio=scroll.getHeight()/(float)(rows().getChildAt(0).getHeight()+Math.round(4*getTargetContext().getResources().getDisplayMetrics().density));check(ratio>3.4f&&ratio<3.6f,"3.5-row viewport");LinearLayout first=(LinearLayout)rows().getChildAt(0);check(((android.graphics.drawable.ColorDrawable)first.getChildAt(0).getBackground()).getColor()==AppTheme.jobColor(getTargetContext(),item(21).job),"advance color complementary");LinearLayout route=(LinearLayout)((LinearLayout)rows().getChildAt(1)).getChildAt(1);check(((TextView)route.getChildAt(1)).getTextSize()/getTargetContext().getResources().getDisplayMetrics().scaledDensity>=28,"large matching mark");scroll.fullScroll(View.FOCUS_DOWN);});
             waitForIdleSync();Thread.sleep(500);main(()->{check(((ScrollView)field(view,"scroll")).getScrollY()>0,"ten rows scroll");view.offer(item(22));check(((ScrollView)field(view,"scroll")).getScrollY()==0,"new job scrolls to newest");});
             capture("fulllock-ten-jobs.png");
             main(()->{view.toggle();check(field(view,"panel")!=null,"collapse retains panel during transition");});Thread.sleep(650);
@@ -131,8 +133,9 @@ public class OverlayChecks extends Instrumentation {
                 Store.prefs(getTargetContext()).edit().putBoolean("enabled",false).apply();check(JobListener.floatingVisible(),"auto-off keeps FAB");
             });
             monitorChecks();
+            int filterCount=new FilterChecks(getTargetContext()).run();
             int historyCount=new HistoryChecks(this).run();
-            int uiCount=new UiChecks(this,preview).run(); result.putString("stream","OverlayChecks: "+checks+" checks passed\nHistoryChecks: "+historyCount+" checks passed\nUiChecks: "+uiCount+" checks passed\n");
+            int uiCount=new UiChecks(this,preview).run(); result.putString("stream","OverlayChecks: "+checks+" checks passed\nFilterChecks: "+filterCount+" checks passed\nHistoryChecks: "+historyCount+" checks passed\nUiChecks: "+uiCount+" checks passed\n");
             }else result.putString("stream","PanelChecks: "+checks+" checks passed\n");
         }catch(Throwable e){code=Activity.RESULT_CANCELED;result.putString("stream","OverlayChecks failed: "+e+"\n");}
         finally{main(()->{if(view!=null)view.hide();if(probe!=null)getTargetContext().unregisterReceiver(probe);getTargetContext().getSystemService(NotificationManager.class).cancel(41);MainActivity.foreground=false;if(saved!=null){var edit=Store.prefs(getTargetContext()).edit().clear();for(var entry:saved.entrySet()){Object v=entry.getValue();String k=entry.getKey();if(v instanceof String)edit.putString(k,(String)v);else if(v instanceof Boolean)edit.putBoolean(k,(Boolean)v);else if(v instanceof Integer)edit.putInt(k,(Integer)v);else if(v instanceof Long)edit.putLong(k,(Long)v);else if(v instanceof Float)edit.putFloat(k,(Float)v);}edit.apply();JobListener.refreshFloating();}});}

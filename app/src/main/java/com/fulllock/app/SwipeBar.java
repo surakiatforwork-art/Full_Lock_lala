@@ -1,40 +1,60 @@
 package com.fulllock.app;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
-import android.graphics.Typeface;
+import android.graphics.*;
+import android.os.*;
 import android.view.*;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.*;
 import java.util.function.BooleanSupplier;
 
-/** Commit only when a drag from the handle reaches the far end; taps never toggle. */
+/** Start on release at the endpoint. Stopping requires a separate confirmation tap. */
 final class SwipeBar extends FrameLayout {
-    private final TextView handle;
+    private TextView handle;
     private final BooleanSupplier commit;
+    private final boolean enabled;
     private float downX;
-    private boolean tracking;
+    private boolean tracking,feedbackGiven;
     SwipeBar(Context c,boolean enabled,BooleanSupplier commit){
-        super(c);this.commit=commit;setTag("swipe-bar");setContentDescription(enabled?"ปัดเพื่อหยุด":"ปัดเพื่อเริ่ม");
-        setBackground(AppTheme.background(AppTheme.accent(c),dp(12)));setPadding(dp(6),dp(6),dp(6),dp(6));
-        TextView label=new TextView(c);label.setText(enabled?"ปัดเพื่อหยุด  ››":"ปัดเพื่อเริ่ม  ››");label.setTextColor(AppTheme.onAccent(c));label.setTextSize(17);label.setTypeface(null,Typeface.BOLD);label.setGravity(Gravity.CENTER);label.setPadding(dp(50),0,dp(5),0);addView(label,new LayoutParams(-1,-1));
-        handle=new TextView(c);handle.setText("→");handle.setTextSize(28);handle.setGravity(Gravity.CENTER);handle.setTextColor(AppTheme.accent(c));handle.setBackground(AppTheme.background(AppTheme.surface(c),dp(8)));handle.setElevation(dp(2));addView(handle,new LayoutParams(dp(48),-1,Gravity.START));setFocusable(true);
+        super(c);this.enabled=enabled;this.commit=commit;setTag("swipe-bar");setPadding(dp(6),dp(6),dp(6),dp(6));setFocusable(true);normal();
     }
     private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}
+    private TextView text(String value){TextView t=new TextView(getContext());t.setText(value);t.setTextColor(AppTheme.onAccent(getContext()));t.setTextSize(17);t.setTypeface(null,Typeface.BOLD);t.setGravity(Gravity.CENTER);return t;}
+    private void normal(){
+        removeAllViews();setBackground(AppTheme.background(AppTheme.accent(getContext()),dp(17)));setContentDescription(enabled?"แตะเพื่อหยุด":"ปัดเพื่อเริ่ม");
+        TextView label=text(enabled?"แตะเพื่อหยุด":"ปัดเพื่อเริ่ม  ››");if(!enabled)label.setPadding(dp(50),0,0,0);addView(label,new LayoutParams(-1,-1));
+        setOnClickListener(enabled?v->confirmStop():null);
+        if(!enabled){handle=text("→");handle.setTextSize(28);handle.setTextColor(AppTheme.accent(getContext()));handle.setBackground(AppTheme.background(AppTheme.surface(getContext()),dp(12)));handle.setElevation(dp(2));addView(handle,new LayoutParams(dp(48),-1,Gravity.START));}
+    }
+    private void confirmStop(){
+        removeAllViews();setOnClickListener(null);setContentDescription("ยืนยันหยุดทำงาน หรือยกเลิก");
+        LinearLayout choices=new LinearLayout(getContext());choices.setGravity(Gravity.CENTER_VERTICAL);addView(choices,new LayoutParams(-1,-1));
+        TextView confirm=text("ยืนยันหยุดทำงาน");confirm.setTag("stop-confirm");choices.addView(confirm,new LinearLayout.LayoutParams(0,-1,1));confirm.setOnClickListener(v->commit.getAsBoolean());
+        TextView cancel=text("ยกเลิก");cancel.setTag("stop-cancel");cancel.setTextColor(Color.BLACK);cancel.setTextSize(14);cancel.setBackground(AppTheme.background(Color.WHITE,dp(11)));cancel.setElevation(dp(4));LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(dp(82),-1);cp.setMargins(dp(8),dp(2),dp(3),dp(3));choices.addView(cancel,cp);cancel.setOnClickListener(v->normal());
+    }
     private float travel(){return Math.max(0,getWidth()-getPaddingLeft()-getPaddingRight()-handle.getWidth());}
-    private void reset(){handle.animate().translationX(0).setDuration(150).start();tracking=false;}
+    private boolean atEnd(){return travel()>0&&handle.getTranslationX()>=travel()-dp(2);}
+    private void reset(){handle.animate().translationX(0).setDuration(150).start();tracking=false;getParent().requestDisallowInterceptTouchEvent(false);}
+    private void endpoint(){if(feedbackGiven)return;feedbackGiven=true;Vibrator vibrator=getContext().getSystemService(Vibrator.class);if(vibrator!=null&&vibrator.hasVibrator())vibrator.vibrate(VibrationEffect.createOneShot(35,VibrationEffect.DEFAULT_AMPLITUDE));Splash splash=new Splash(getContext());splash.setTag("start-splash");addView(splash,new LayoutParams(-1,-1));ValueAnimator animation=ValueAnimator.ofFloat(0,1);animation.setDuration(340);animation.addUpdateListener(a->{splash.progress=(float)a.getAnimatedValue();splash.invalidate();});animation.addListener(new android.animation.AnimatorListenerAdapter(){@Override public void onAnimationEnd(android.animation.Animator a){removeView(splash);}});animation.start();}
     @Override public boolean onTouchEvent(MotionEvent e){
+        if(enabled)return super.onTouchEvent(e);
         switch(e.getActionMasked()){
             case MotionEvent.ACTION_DOWN:
                 if(e.getX()>getPaddingLeft()+handle.getWidth()+dp(8))return false;
-                handle.animate().cancel();handle.setTranslationX(0);downX=e.getX();tracking=true;getParent().requestDisallowInterceptTouchEvent(true);return true;
-            case MotionEvent.ACTION_MOVE:if(!tracking)return false;handle.setTranslationX(Math.max(0,Math.min(travel(),e.getX()-downX)));return true;
+                handle.animate().cancel();handle.setTranslationX(0);downX=e.getX();tracking=true;feedbackGiven=false;getParent().requestDisallowInterceptTouchEvent(true);return true;
+            case MotionEvent.ACTION_MOVE:if(!tracking)return false;handle.setTranslationX(Math.max(0,Math.min(travel(),e.getX()-downX)));if(atEnd())endpoint();return true;
             case MotionEvent.ACTION_UP:
-                if(!tracking)return false;boolean complete=travel()>0&&handle.getTranslationX()>=travel()*.85f;tracking=false;getParent().requestDisallowInterceptTouchEvent(false);
-                if(complete){commit.getAsBoolean();}reset();return true;
+                if(!tracking)return false;handle.setTranslationX(Math.max(0,Math.min(travel(),e.getX()-downX)));boolean complete=atEnd();if(complete)endpoint();reset();if(complete)commit.getAsBoolean();return true;
             case MotionEvent.ACTION_CANCEL:reset();return true;
             default:return super.onTouchEvent(e);
         }
     }
-    @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info){super.onInitializeAccessibilityNodeInfo(info);info.setClassName(SeekBar.class.getName());info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,"ปัดเพื่อยืนยัน"));}
-    @Override public boolean performAccessibilityAction(int action,android.os.Bundle args){if(action==AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)return commit.getAsBoolean();return super.performAccessibilityAction(action,args);}
+    @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info){super.onInitializeAccessibilityNodeInfo(info);if(!enabled){info.setClassName(SeekBar.class.getName());info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,"ปัดเพื่อเริ่ม"));}}
+    @Override public boolean performAccessibilityAction(int action,Bundle args){if(!enabled&&action==AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)return commit.getAsBoolean();return super.performAccessibilityAction(action,args);}
+    private final class Splash extends View {
+        float progress;final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+        Splash(Context c){super(c);setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);}
+        @Override protected void onDraw(Canvas canvas){paint.setColor(AppTheme.onAccent(getContext()));paint.setAlpha((int)(180*(1-progress)));float x=getWidth()-dp(27),y=getHeight()/2f;for(int i=0;i<7;i++){double angle=Math.PI*2*i/7;float radius=dp(5+24*progress);canvas.drawCircle(x+(float)Math.cos(angle)*radius,y+(float)Math.sin(angle)*radius,dp(2.5f)*(1-progress*.7f),paint);}}
+    }
 }

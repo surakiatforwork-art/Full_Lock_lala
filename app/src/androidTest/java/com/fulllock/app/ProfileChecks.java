@@ -1,0 +1,29 @@
+package com.fulllock.app;
+import android.app.Instrumentation;
+import android.content.*;
+import org.json.*;
+import java.util.*;
+
+final class ProfileChecks {
+    final Instrumentation test;int count;
+    ProfileChecks(Instrumentation test){this.test=test;}
+    void check(boolean ok,String why){if(!ok)throw new AssertionError(why);count++;}
+    void reject(Runnable action,String why){try{action.run();throw new AssertionError(why);}catch(IllegalArgumentException expected){count++;}}
+    int run(){test.runOnMainSync(()->{
+        Context real=test.getTargetContext();Context isolated=new ContextWrapper(real){@Override public SharedPreferences getSharedPreferences(String name,int mode){return real.getSharedPreferences("profile-migration-check",mode);}};
+        isolated.getSharedPreferences("settings",0).edit().clear().putString("min","321").putString("origins","ค่าจากรุ่นก่อน").putInt("themeColor",0xFF123456).putBoolean("invertText",true).putBoolean("enabled",true).apply();
+        try{Profiles.initialize(isolated);check(Profiles.entries().length()==1&&Profiles.activeName().equals("โปรไฟล์เริ่มต้น"),"first migration creates named default");ProfileFile.Data migrated=Profiles.data(Profiles.get(Profiles.active()));check(migrated.values.get("min").equals("321")&&migrated.values.get("origins").equals("ค่าจากรุ่นก่อน"),"migration preserves legacy filters");check(migrated.values.get("themeColor").equals(0xFF123456)&&migrated.values.get("invertText").equals(true),"migration preserves legacy theme");check(!migrated.values.containsKey("enabled"),"migration excludes app globals");String migratedId=Profiles.active();Profiles.initialize(isolated);check(Profiles.entries().length()==1&&Profiles.active().equals(migratedId),"migration idempotent");}finally{Profiles.initialize(real);real.deleteSharedPreferences("profile-migration-check");}
+        var p=Store.prefs(test.getTargetContext());String original=Profiles.active();check(Profiles.get(original)!=null,"migration has active profile");check(Profiles.entries().length()>=1,"migration keeps at least one");
+        Profiles.rename(original,"ทดสอบต้นฉบับ");check(Profiles.activeName().equals("ทดสอบต้นฉบับ"),"default profile can be renamed");
+        p.edit().putString("min","150").putString("max","900").putString("origins","คลองสาม").putInt("themeColor",0xFF2563EB).putBoolean("invertText",true).apply();
+        ProfileFile.Data saved=Profiles.data(Profiles.get(original));check(saved.values.get("min").equals("150"),"autosave price");check(saved.values.get("themeColor").equals(0xFF2563EB),"autosave theme");check(saved.values.get("invertText").equals(true),"autosave text inversion");
+        String copy=Profiles.create("สำเนาทดสอบ",original);check(Profiles.data(Profiles.get(copy)).values.equals(saved.values),"copy all scoped settings");Profiles.select(copy);p.edit().putString("min","200").apply();check(Profiles.data(Profiles.get(original)).values.get("min").equals("150"),"edits isolate profiles");
+        p.edit().putString("history","[]").putInt("transitionMs",730).putBoolean("floatingEnabled",false).putBoolean("enabled",true).apply();Profiles.select(original);check(p.getString("min","").equals("150"),"switch restores filters");check(p.getInt("themeColor",0)==0xFF2563EB&&p.getBoolean("invertText",false),"switch restores palette");check(p.getInt("transitionMs",0)==730&&!p.getBoolean("floatingEnabled",true)&&p.getBoolean("enabled",false),"global controls survive switch");check(!saved.values.containsKey("enabled")&&!saved.values.containsKey("history"),"globals excluded from export");
+        reject(()->Profiles.create("ทดสอบต้นฉบับ",null),"duplicate create rejected");reject(()->Profiles.rename(copy,"ทดสอบต้นฉบับ"),"duplicate rename rejected");
+        ProfileFile.Data imported=new ProfileFile.Data("ทดสอบต้นฉบับ",Map.of("destinations","คลองสามประเวศ","excludeDestOn",true));String before=Profiles.entries().toString();reject(()->Profiles.install(imported,false),"duplicate requires permission");check(before.equals(Profiles.entries().toString()),"refused overwrite does not mutate");int size=Profiles.entries().length();check(Profiles.install(imported,true).equals(original),"overwrite retains identity");check(Profiles.entries().length()==size,"overwrite does not add duplicate");check(p.getString("destinations","").equals("คลองสามประเวศ"),"overwrite applies imported settings");check(p.getInt("transitionMs",0)==730&&p.getBoolean("enabled",false),"import preserves global controls");
+        Profiles.delete(original);check(!Profiles.active().equals(original)&&Profiles.get(Profiles.active())!=null,"delete auto selects replacement");
+        while(Profiles.entries().length()>1){JSONArray list=Profiles.entries();String id=list.optJSONObject(0).optString("id");if(id.equals(Profiles.active()))id=list.optJSONObject(1).optString("id");Profiles.delete(id);}
+        reject(()->Profiles.delete(Profiles.active()),"last profile protected");check(Profiles.entries().length()==1,"last profile remains");
+        p.edit().putBoolean("enabled",false).apply();
+    });return count;}
+}
