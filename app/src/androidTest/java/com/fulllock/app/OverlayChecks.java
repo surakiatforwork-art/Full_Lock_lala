@@ -117,14 +117,14 @@ public class OverlayChecks extends Instrumentation {
                 for(int i=1;i<=5;i++)view.offer(item(i));
                 check(view.model.unread==5,"five unread");check(rows().getChildCount()==1,"automatic preview one item");
                 check(view.model.mode==FloatingJobs.Mode.PREVIEW,"preview mode");
-                LinearLayout previewRow=(LinearLayout)rows().getChildAt(0),previewRoute=(LinearLayout)previewRow.getChildAt(1);check(((TextView)previewRoute.getChildAt(1)).getText().toString().equals("฿228.80"),"new job preview shows net including tip fee");
+                LinearLayout previewRow=(LinearLayout)rows().getChildAt(0),previewRoute=(LinearLayout)previewRow.getChildAt(1);check(((TextView)previewRoute.getChildAt(1)).getText().toString().equals("฿230.80"),"new job preview keeps tip free of commission");
             });
             if(!extraOnly){
             Thread.sleep(3400);
             main(()->{check(view.model.mode==FloatingJobs.Mode.COLLAPSED,"preview closes after 3 seconds");check(view.model.unread==5,"preview does not mark read");view.toggle();check(view.model.unread==0,"opening FAB marks read");check(rows().getChildCount()==5,"pinned list five items");view.offer(item(6));check(view.model.mode==FloatingJobs.Mode.PINNED,"new item preserves pinned");check(view.model.items.get(0).id.equals(item(6).id),"newest first");check(rows().getChildCount()==6,"six jobs retained");check(view.model.unread==0,"visible new item read");
                 LinearLayout row=(LinearLayout)rows().getChildAt(0);LinearLayout route=(LinearLayout)row.getChildAt(1);
                 check(((TextView)route.getChildAt(0)).getTypeface().isBold(),"route bold");check(((TextView)row.getChildAt(0)).getTypeface().isBold(),"type bold");check(((TextView)row.getChildAt(2)).getTypeface().isBold(),"fare tip bold");check(route.getChildCount()==3&&((TextView)route.getChildAt(2)).getText().toString().equals("✓"),"matching checkmark follows net");check(row.getChildCount()==3,"no rejection reason in panel");
-                TextView net=(TextView)route.getChildAt(1);check(net.getText().toString().equals("฿228.80")&&net.getTypeface().isBold(),"list net amount bold and correct");check(net.getTextSize()>((TextView)row.getChildAt(2)).getTextSize(),"net larger than fare and tip");
+                TextView net=(TextView)route.getChildAt(1);check(net.getText().toString().equals("฿230.80")&&net.getTypeface().isBold(),"list net amount bold and correct");check(net.getTextSize()>((TextView)row.getChildAt(2)).getTextSize(),"net larger than fare and tip");
             });
             capture("fulllock-fab-left.png");Thread.sleep(3200);
             View[] targetRow=new View[1];main(()->targetRow[0]=rows().getChildAt(0));tap(targetRow[0]);main(()->{check(selected.size()==1,"real tap opens row callback");check(view.model.mode==FloatingJobs.Mode.PINNED,"inside tap does not collapse panel");selected.clear();});

@@ -8,10 +8,10 @@ import java.util.regex.*;
 public final class JobParser {
     public record Job(String category, String origin, String destination, String type,
                       BigDecimal fare, BigDecimal tip, String title, String text) {
-        // Overlay display uses commission on the total (fare + tip), independently of the selected filter formula.
+        // Commission applies only to the fare; add the full tip afterwards.
         public BigDecimal overlayNet(int fee) {
-            return fare.add(tip).multiply(BigDecimal.valueOf(100 - Math.max(0, Math.min(100, fee))))
-                    .movePointLeft(2).setScale(2, java.math.RoundingMode.HALF_UP);
+            return fare.multiply(BigDecimal.valueOf(100 - Math.max(0, Math.min(100, fee))))
+                    .movePointLeft(2).add(tip).setScale(2, java.math.RoundingMode.HALF_UP);
         }
         public BigDecimal price(int formula, int fee) {
             BigDecimal base = fare;
