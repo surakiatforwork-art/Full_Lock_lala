@@ -27,7 +27,7 @@ const duplicate=catalog.areas.filter(a=>a.name==='บ้านใหม่');ass
 assert.throws(()=>routeSettings({...buckets,origins:new Set(north.map(a=>a.id))},ids),/มากเกินขนาด/);
 const bytes=Buffer.from(await encodeProfile('แผนที่ประเทศไทย',settings));const raw=inflateSync(bytes.subarray(21));assert.equal(crc32(raw),bytes.readUInt32BE(17));
 await mkdir('app/build/profile-fixtures',{recursive:true});await writeFile('app/build/profile-fixtures/website.flp',bytes);
-const html=await readFile('index.html','utf8');assert.ok(html.includes('/releases/latest'));assert.ok(!html.includes('/releases/download/v'));
+const html=await readFile('index.html','utf8');assert.ok(!html.includes('github.com/surakiatforwork-art'));assert.equal([...html.matchAll(/href="web\/downloads\/FullLock.apk" download="FullLock.apk"/g)].length,4);
 // Every local asset linked by the root entry point is present before publication.
 for(const [,path] of html.matchAll(/(?:src|href)="((?:web|tools)\/[^"#]+)"/g))await readFile(path);
 const motion=await readFile('web/motion.mjs','utf8'),polish=await readFile('web/polish.css','utf8');

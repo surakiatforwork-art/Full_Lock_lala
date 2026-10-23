@@ -6,3 +6,5 @@ local.properties
 *.p12
 *signing*.properties
 .codex-remote-attachments/
+dist/
+**/__pycache__/

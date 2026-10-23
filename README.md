@@ -1,6 +1,6 @@
 # Full Lock Android
 
-เว็บไซต์แนะนำแอปและสร้างโปรไฟล์อยู่ที่ `index.html` ใน root ของ main รองรับ static hosting โดยไม่ต้อง build ดูวิธีเปิดทดสอบ ข้อมูลแผนที่ และการ deploy ที่ [docs/website.md](docs/website.md)
+เว็บไซต์แนะนำแอปและสร้างโปรไฟล์อยู่ที่ `index.html` ใน root ของ main รองรับ static hosting โดยคัดไฟล์สาธารณะด้วย `node tools/package-website.mjs` แล้ว publish `dist` ดูวิธีเปิดทดสอบ ข้อมูลแผนที่ และการ deploy ที่ [docs/website.md](docs/website.md)
 
 แอป Android แบบ native ที่ย้ายตัวกรองจาก Automagic มาเป็นแอปแยก ใช้ Java 17, Android SDK 35, Gradle wrapper 8.11.1 และ AGP 8.9.1 รองรับ Android 8 ขึ้นไป
 

@@ -1,6 +1,6 @@
 # เว็บไซต์ Full Lock
 
-หน้าเริ่มต้นคือ `index.html` ที่ root ของ branch main ไม่มีขั้นตอน build
+หน้าเริ่มต้นคือ `index.html` ที่ root ของ branch main เป็นเว็บ static มีขั้นตอนคัดไฟล์สาธารณะไป `dist` ก่อน deploy
 
 ปรับมือถือเป็นหลัก: landing แสดงภาพความละเอียดสูงพร้อมการเคลื่อนไหวเบา ๆ เส้นทางเคลื่อน แสงพื้นหลัง การเผยเนื้อหาเมื่อเลื่อน และปฏิกิริยาตอนแตะ มีแถบลัดดาวน์โหลด/สร้างโปรไฟล์ด้านล่างบนมือถือ รองรับ prefers-reduced-motion เพื่อปิดเอฟเฟกต์ และเอฟเฟกต์ตกแต่งหยุดหลังเล่นตามรอบที่กำหนด
 
@@ -10,11 +10,25 @@
 
 รัน `python -m http.server 8765 --bind 127.0.0.1` ที่ root แล้วเปิด http://127.0.0.1:8765 อย่าเปิด index.html ผ่าน file:// เพราะเบราว์เซอร์ต้องโหลดข้อมูลแผนที่
 
-สำหรับ static hosting ให้ publish root โดยนำเฉพาะ `index.html`, `web/` และ `tools/flp-web-codec.mjs` ขึ้นเว็บ ไม่ต้องนำ app/, keystore, signing properties หรือ .git ขึ้น hosting ใช้ HTTPS ในการเผยแพร่จริง รองรับ GitHub Pages แบบ deploy จาก branch main / root
+สำหรับ Vercel / Netlify ให้เชื่อมต่อ repo (private ได้ เมื่อให้ผู้ให้บริการเข้าถึง repo) แล้วใช้ไฟล์ vercel.json / netlify.toml ที่เตรียมไว้ **อย่า publish root ของ repo ทั้งชุด** เพราะมีซอร์ส Android ด้วย คำสั่งเตรียมเว็บคัดเฉพาะ index.html, web/ และ tools/flp-web-codec.mjs ไป dist ไม่ส่ง app/, .git, docs, workflow หรือเครื่องมือเผยแพร่ขึ้นเว็บ
 
-ตั้งค่าผู้ให้บริการ: Framework = None, Build command = เว้นว่าง, Output / Publish directory = `.` (root) ไม่มีตัวแปรลับที่ต้องตั้ง `.nojekyll` รองรับการเสิร์ฟไฟล์ static จาก GitHub Pages โดยตรง
+ตั้งค่าผู้ให้บริการ: Framework = Other/None, Build command = `node tools/package-website.mjs`, Output / Publish directory = `dist` ไม่มี token หรือค่าลับที่ต้องตั้งในเว็บ มี .nojekyll สำหรับ static hosting ด้วย
 
-ปุ่มดาวน์โหลดชี้ GitHub `/releases/latest` โดยตรง รุ่นใหม่จึงไม่ต้องแก้เว็บ ไม่ต้องใช้ token หรือเรียก GitHub API
+ทุกปุ่มดาวน์โหลดชี้ไฟล์ `web/downloads/FullLock.apk` บนโดเมนเว็บเอง พร้อม download attribute ไม่พาไปหน้า GitHub และไม่เรียก GitHub API จากเบราว์เซอร์ Vercel/Netlify กำหนด Content-Disposition ให้โหลดไฟล์และตรวจ cache ใหม่ทุกครั้ง
+
+ไฟล์ APK ที่เผยแพร่สาธารณะอยู่ใน Git ชื่อคงที่ version.json เก็บเฉพาะรุ่น ขนาด และ SHA256 ไม่มี token หรือ URL repo ไฟล์นี้เริ่มจาก v0.1.13 ที่ตรวจ checksum จาก Release แล้ว
+
+### อัปเดต APK เมื่อมี Release ใหม่
+
+Workflow `.github/workflows/sync-website-apk.yml` ทำงานเมื่อ publish Release (หรือ Run workflow เอง) เรียก `tools/sync-website-apk.py` เพื่อดึง **stable latest** ตรวจ SHA256SUMS และ GitHub asset digest แล้ว commit เฉพาะ web/downloads กลับ main โฮสต์ที่เชื่อม Git สามารถ deploy จาก commit ใหม่ได้ ไม่ต้องแก้ลิงก์ในหน้าเว็บ อัปโหลด APK และ SHA256SUMS ใน draft ให้ครบก่อน publish
+
+GITHUB_TOKEN อยู่ใน workflow ฝั่งผู้เผยแพร่เท่านั้น ไม่ถูกส่งออกใน dist หาก branch protection หรือสิทธิ์ Actions ไม่อนุญาตให้ bot push งานจะล้มเหลวโดยเก็บไฟล์เดิมไว้ ให้รัน `python tools/sync-website-apk.py` จากเครื่องผู้พัฒนาที่ล็อกอิน gh แล้ว commit ตามปกติ
+
+### Repo private กับเว็บไซต์สาธารณะ
+
+Vercel/Netlify ต้องได้รับสิทธิ์อ่าน repo เพื่อ build แต่ผู้ดาวน์โหลดไม่ต้องมีบัญชี GitHub เพราะไฟล์ APK เสิร์ฟจากเว็บไซต์ หากเปลี่ยน visibility ให้ตรวจ Git integration ของโฮสต์แล้วยืนยันว่า deploy ล่าสุดสำเร็จ Repo ยังไม่ได้ถูกเปลี่ยนเป็น private โดยงานนี้ การซ่อนลิงก์ไม่ทำให้ repo ที่ยัง public เป็นความลับ และไม่เรียกคืนสำเนาที่มีคนดาวน์โหลดไว้แล้ว
+
+GitHub Pages จาก repo private ขึ้นกับแผน GitHub (Free ใช้ public repo; private ต้อง Pro/Team/Enterprise ตามเงื่อนไข) ส่วน Release จาก repo private ต้องยืนยันสิทธิ์ จึงไม่ใช้เป็นปลายทางดาวน์โหลดสาธารณะโดยตรง
 
 ## การเลือกพื้นที่
 
@@ -43,6 +57,10 @@
 แอป v0.1.12 จำกัดแต่ละรายชื่อ 16 KiB เว็บตรวจและไม่ส่งออกหากเกิน เพื่อไม่สร้างไฟล์ที่แอปอ่านไม่ได้ เลือกทั้งภาค/ประเทศอาจเกินเพดาน ต้องลดพื้นที่จนกว่าจะมีแอปที่เพิ่มขนาดรองรับ ไม่ตัดชื่อเงียบ ๆ
 
 ทดสอบ `node tests/website-checks.mjs` และทดสอบ FLP ข้าม Java/Node ตาม docs/website-and-flp-plan.md
+
+ตรวจแพ็กเกจและ APK: `node tools/package-website.mjs` แล้ว `node tests/website-download-checks.mjs` ตรวจ hash, ขนาด, ลิงก์ทั้งสี่ และไม่มีซอร์ส/กุญแจใน dist
+
+ทดสอบ direct download รอบนี้: เรียก APK จาก HTTP ของ dist ได้ 200 พร้อม SHA256 ตรง v0.1.13 กดปุ่มในเบราว์เซอร์แล้ว URL หน้ายังเป็นเว็บเดิม ไม่มีการเปิด GitHub ตรวจ app/build.gradle, .git/config และ tools/sync-website-apk.py จาก public server ได้ 404 ทั้งหมด (การตรวจ header เฉพาะ Vercel/Netlify ต้องตรวจอีกครั้งเมื่อ deploy จริง)
 
 ไฟล์จากตัวสร้างเว็บ: หลังรันทดสอบ Node แล้ว รัน `javac -encoding UTF-8 -d app/build/profile-checks app/src/main/java/com/fulllock/app/ProfileFile.java tests/WebsiteProfileCheck.java` และ `java -cp app/build/profile-checks WebsiteProfileCheck app/build/profile-fixtures/website.flp`
 
