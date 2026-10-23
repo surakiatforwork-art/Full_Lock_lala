@@ -44,6 +44,8 @@ public class ParserChecks {
         var driverSample=JobParser.parse("[ขนส่งสินค้า] อ้อมเกร็ด > บางตะไนย์","ขนส่งทันที ฿83.00 + ฿7.00 รับงานขนส่ง!");
         check(driverSample.overlayNet(20).equals(new BigDecimal("73.40")),"driver example: 83 minus 20 percent plus 7");
         check(driverSample.overlayNet(20).compareTo(driverSample.price(3,20))==0,"overlay agrees with net plus tip filter");
-        System.out.println("ParserChecks: 35 checks passed");
+        var passenger=JobParser.notificationJob("[รับ-ส่งผู้โดยสาร] บางกระสอ > บางกระสอ","ขนส่งทันที ฿48.00 รับงานขนส่ง!",false,false);
+        check(passenger!=null&&passenger.category().equals("รับ-ส่งผู้โดยสาร")&&passenger.fare().equals(new BigDecimal("48.00")),"passenger screenshot parsed");
+        System.out.println("ParserChecks: 36 checks passed");
     }
 }

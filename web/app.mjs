@@ -83,7 +83,10 @@ $('profile-form').onsubmit=async event=>{event.preventDefault();try{
  if(stage.size)throw Error('ยังมีพื้นที่ที่เลือกไว้ กรุณากำหนดเป็นต้นทางหรือปลายทาง หรือล้างที่เลือกก่อน');
  const name=$('profile-name').value.trim().normalize('NFC');if(!name||[...name].length>60||/[\u0000-\u001f\u007f-\u009f]/u.test(name))throw Error('ตั้งชื่อโปรไฟล์ 1–60 ตัวอักษร');
  const min=$('min').value,max=$('max').value;if(!/^\d{1,10}(\.\d{1,2})?$/.test(min)||!/^\d{1,10}(\.\d{1,2})?$/.test(max)||Number(min)>Number(max))throw Error('ตรวจช่วงราคา ราคาต่ำสุดต้องไม่เกินราคาสูงสุด');
- const settings={...routeSettings(buckets,byId),price:$('price').checked,min,max,formula:Number($('formula').value),fee:Number($('fee').value),type:Number($('type').value),bulk:$('bulk').checked,themeColor:(0xff000000|parseInt($('theme').value.slice(1),16)),invertText:$('invert').checked};
+ const selectedMask=name=>[...document.querySelectorAll(`input[name="${name}"]:checked`)].reduce((mask,input)=>mask|Number(input.value),0);
+ const serviceMask=selectedMask('service'),timeMask=selectedMask('job-time');
+ if(!serviceMask||!timeMask){toast('เลือกบริการและเวลาอย่างน้อยอย่างละ 1 รายการ');return;}
+ const settings={...routeSettings(buckets,byId),price:$('price').checked,min,max,formula:Number($('formula').value),fee:Number($('fee').value),type:timeMask===3?0:timeMask,serviceMask,bulk:$('bulk').checked,themeColor:(0xff000000|parseInt($('theme').value.slice(1),16)),invertText:$('invert').checked};
  const bytes=await encodeProfile(name,settings);clearDownload();downloadUrl=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));const link=make('a','กดที่นี่หากดาวน์โหลดไม่เริ่ม','text-link');link.id='save-profile';link.href=downloadUrl;link.download=name.replace(/[<>:"/\\|?*]/g,'_')+'.flp';$('download').after(link);link.click();toast('ไฟล์พร้อมแล้ว นำเข้าโปรไฟล์ใน Full Lock ได้เลย');
  }catch(error){toast(error.message.startsWith('รายชื่อ')||/[ก-๙]/.test(error.message)?error.message:'สร้างโปรไฟล์ไม่ได้ กรุณาตรวจค่าที่ตั้งไว้');}};
 if('IntersectionObserver' in window){const loader=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting)){loader.disconnect();init();}},{rootMargin:'400px'});loader.observe($('builder'));}else init();

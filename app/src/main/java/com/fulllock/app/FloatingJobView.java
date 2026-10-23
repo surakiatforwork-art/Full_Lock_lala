@@ -142,7 +142,7 @@ final class FloatingJobView {
     }
     private void bind(LinearLayout row,FloatingJobs.Item item,boolean animateMark){
         row.removeAllViews();row.setGravity(Gravity.TOP);row.setBackground(background(AppTheme.surface(context),18));
-        TextView type=text(item.job==null?"งานขนส่ง":item.job.type(),9,true);type.setTextColor(AppTheme.onAccent(context));type.setPadding(dp(8),dp(2),dp(8),dp(2));type.setBackgroundColor(AppTheme.jobColor(context,item.job));row.addView(type,new LinearLayout.LayoutParams(-1,-2));
+        TextView type=text(item.job==null?"งานขนส่ง":item.job.type()+" · "+item.job.category(),9,true);type.setTextColor(AppTheme.onAccent(context));type.setPadding(dp(8),dp(2),dp(8),dp(2));type.setBackgroundColor(AppTheme.jobColor(context,item.job));row.addView(type,new LinearLayout.LayoutParams(-1,-2));
         LinearLayout route=new LinearLayout(context);route.setGravity(Gravity.CENTER_VERTICAL);route.setPadding(dp(8),0,dp(8),0);
         String title=item.job==null?item.title:item.job.origin()+" → "+item.job.destination();
         TextView path=text(title,11,true);path.setTextColor(AppTheme.ink(context));path.setMaxLines(2);path.setEllipsize(android.text.TextUtils.TruncateAt.END);route.addView(path,new LinearLayout.LayoutParams(0,-2,1));

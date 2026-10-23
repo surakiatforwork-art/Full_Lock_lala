@@ -72,14 +72,14 @@ public class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(systemFlags);getWindow().setStatusBarColor(AppTheme.page(this));getWindow().setNavigationBarColor(AppTheme.surface(this));
         frame=new FrameLayout(this);frame.setBackgroundColor(AppTheme.page(this));root=column();root.setBackgroundColor(AppTheme.page(this));frame.addView(root);
         frame.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
-        LinearLayout header=column();header.setBackgroundColor(accent);pad(header,22,8,22,20);root.addView(header);
+        LinearLayout header=column();header.setBackgroundColor(accent);pad(header,22,4,22,page==Page.FILTERS?10:20);root.addView(header);
         int on=AppTheme.onAccent(this);LinearLayout toolbar=row();TextView menu=label("☰",28,on,false);pad(menu,0,0,17,0);menu.setContentDescription("เปิดเมนู");menu.setTag("open-menu");menu.setOnClickListener(v->showDrawer());toolbar.addView(menu);
         TextView brand=label("FULL LOCK",17,on,true);brand.setGravity(Gravity.CENTER_VERTICAL);brand.setLetterSpacing(.10f);toolbar.addView(brand,new LinearLayout.LayoutParams(0,dp(48),1));
-        String status=p().getBoolean("enabled",false)?"● อัตโนมัติ":"● อ่านงาน";toolbar.addView(label(status,12,on,false));header.addView(toolbar);space(header,13);
+        String status=p().getBoolean("enabled",false)?"● อัตโนมัติ":"● อ่านงาน";toolbar.addView(label(status,12,on,false));header.addView(toolbar);space(header,page==Page.FILTERS?2:13);
         String title=page==Page.PROFILES?"จัดการโปรไฟล์":page==Page.HISTORY?"ประวัติงาน":page==Page.THEME?"ธีม":page==Page.PERMISSIONS?(p().getBoolean("permissionsReviewed",false)?"การอนุญาตสิทธิ์":"เตรียมใช้งาน"):"ตัวกรองงาน";
-        header.addView(label(title,27,on,true));space(header,4);
+        header.addView(label(title,page==Page.FILTERS?22:27,on,true));space(header,page==Page.FILTERS?0:4);
         String subtitle=page==Page.PROFILES?"เพิ่ม นำเข้า และจัดโปรไฟล์ของคุณ":page==Page.HISTORY?"ดูงานที่เข้าและผลการเลือก":page==Page.THEME?"เลือกสีในแบบของคุณ":page==Page.PERMISSIONS?"เลือกสิ่งที่ต้องการให้แอปช่วย":"เลือกงานที่ใช่ แล้วปัดรับด้วยตัวคุณเอง";
-        header.addView(label(subtitle,14,on,false));
+        if(page!=Page.FILTERS)header.addView(label(subtitle,14,on,false));
         if(page==Page.FILTERS)profileHeader(header,on);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));body=column();pad(body,16,14,16,16);scroll.addView(body);
         switch(page){case PROFILES:profilesBody();break;case HISTORY:historyBody();break;case THEME:themeBody();break;case PERMISSIONS:permissionsBody();break;default:settingsBody();}
@@ -123,7 +123,7 @@ public class MainActivity extends Activity {
         TextView expand=label((unwantedExpanded?"▴ ":"▾ ")+"เส้นทางที่ไม่ต้องการ",15,accent,true);expand.setTag("excluded-toggle");pad(expand,0,13,0,13);excluded.addView(expand);
         LinearLayout blocked=column();blocked.setTag("excluded-settings");blocked.setVisibility(unwantedExpanded?View.VISIBLE:View.GONE);excluded.addView(blocked);expand.setOnClickListener(v->{unwantedExpanded=!unwantedExpanded;blocked.setVisibility(unwantedExpanded?View.VISIBLE:View.GONE);expand.setText((unwantedExpanded?"▴ ":"▾ ")+"เส้นทางที่ไม่ต้องการ");});
         blocked.addView(label("ข้ามพื้นที่เหล่านี้ แม้ตรงเส้นทางที่ต้องการ",12,muted,false));toggle(blocked,"ไม่รับต้นทาง",null,"excludeOriginOn",false);item(blocked,"○ ต้นทาง",areaValue("excludedOrigins"),()->area("ต้นทางที่ไม่ต้องการ","excludedOrigins"));line(blocked);toggle(blocked,"ไม่รับปลายทาง",null,"excludeDestOn",false);item(blocked,"● ปลายทาง",areaValue("excludedDestinations"),()->area("ปลายทางที่ไม่ต้องการ","excludedDestinations"));
-        c=card("03 / งาน","▣ ประเภทงาน");String[] types={"ทั้งหมด","ขนส่งทันที","งานล่วงหน้า"};item(c,"เวลา",types[Math.max(0,Math.min(2,p().getInt("type",0)))],()->choose("ประเภทงาน","type",types));line(c);toggle(c,"ไม่รับงานเหมา","ดูจากราคางานที่กำหนดไว้","bulk",false);
+        c=card("03 / งาน","▣ ประเภทงาน");jobChoices(c,"บริการ","serviceMask",new String[]{"ขนส่งสินค้า","รับ-ส่งผู้โดยสาร"},false);line(c);jobChoices(c,"เวลา","type",new String[]{"ขนส่งทันที","งานล่วงหน้า"},true);line(c);toggle(c,"ไม่รับงานเหมา","ดูจากราคางานที่กำหนดไว้","bulk",false);
         c=card(null,null);c.addView(label("ⓘ งานที่ตรงเงื่อนไขจะแสดง ✓",13,ink,true));space(c,5);c.addView(label("อ่านงานได้แม้ยังไม่เริ่มอัตโนมัติ\nค่าธรรมเนียมหักเฉพาะราคางาน ไม่หักทิป",12,muted,false));
     }
     private String areaValue(String key){String value=p().getString(key,"");return value.isBlank()?"ยังไม่เลือก":value;}
@@ -136,6 +136,12 @@ public class MainActivity extends Activity {
     }
     private void area(String title,String key){EditText e=input(p().getString(key,""),1);dialog(new AlertDialog.Builder(this).setTitle(title).setMessage("คั่นชื่อพื้นที่ด้วย , เช่น เสาธงหิน,บางพูด").setView(e).setPositiveButton("บันทึก",(d,w)->{p().edit().putString(key,e.getText().toString().trim()).apply();render();}).setNegativeButton("ยกเลิก",null));}
     private void number(String title,String key,int fallback,int min,int max){EditText e=input(""+p().getInt(key,fallback),2);AlertDialog d=dialog(new AlertDialog.Builder(this).setTitle(title).setView(e).setPositiveButton("บันทึก",null).setNegativeButton("ยกเลิก",null));d.getButton(-1).setOnClickListener(v->{try{int n=Integer.parseInt(e.getText().toString());if(n<min||n>max)throw new IllegalArgumentException();p().edit().putInt(key,n).apply();d.dismiss();render();}catch(Exception ex){e.setError("เลือกค่า "+min+"–"+max);}});}
+    private void jobChoices(LinearLayout parent,String title,String key,String[] names,boolean legacyTime){
+        space(parent,6);parent.addView(label(title+" · เลือกได้มากกว่า 1",12,muted,false));
+        for(int i=0;i<names.length;i++){final int bit=1<<i;CheckBox option=new CheckBox(this);option.setTag(key+"-"+bit);option.setText(names[i]);option.setTextColor(ink);option.setTextSize(14);option.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));option.setMinHeight(dp(44));int value=p().getInt(key,legacyTime?0:1);int mask=legacyTime&&value==0?3:value;option.setChecked((mask&bit)!=0);parent.addView(option,new LinearLayout.LayoutParams(-1,-2));
+            option.setOnClickListener(v->{int current=p().getInt(key,legacyTime?0:1);int selected=legacyTime&&current==0?3:current;int next=option.isChecked()?selected|bit:selected&~bit;if(next==0){option.setChecked(true);Toast.makeText(this,"เลือกอย่างน้อย 1 รายการ",Toast.LENGTH_SHORT).show();return;}p().edit().putInt(key,legacyTime&&next==3?0:next).apply();});
+        }
+    }
     private void choose(String title,String key,String[] options){dialog(new AlertDialog.Builder(this).setTitle(title).setSingleChoiceItems(options,p().getInt(key,0),(d,w)->{p().edit().putInt(key,w).apply();d.dismiss();render();}).setNegativeButton("ยกเลิก",null));}
     private void permissionsBody(){
         boolean first=!p().getBoolean("permissionsReviewed",false);LinearLayout intro=card(null,first?"เริ่มจากการอ่านงาน":"ตั้งค่าสิทธิ์");intro.addView(label("แตะแต่ละข้อเพื่อเปิดการตั้งค่าของเครื่อง\nเลือกทำภายหลังได้ และกลับมาแก้จากเมนู ☰",13,muted,false));
@@ -194,7 +200,7 @@ public class MainActivity extends Activity {
     }
     private void manageProfile(){dismissProfiles();page=Page.PROFILES;profileDeleteMode=false;selectedProfileIds.clear();render();}
     private void profileHeader(LinearLayout header,int on){
-        space(header,9);LinearLayout bar=row();LinearLayout selection=row();selection.setTag("profile-dropdown-anchor");selection.setBackground(AppTheme.background(AppTheme.blend(accent,on,.12f),dp(10)));
+        space(header,5);LinearLayout bar=row();LinearLayout selection=row();selection.setTag("profile-dropdown-anchor");selection.setBackground(AppTheme.background(AppTheme.blend(accent,on,.12f),dp(10)));
         FrameLayout holder=new FrameLayout(this);holder.setTag("profile-name-holder");TextView name=label(Profiles.activeName(),14,on,true);name.setTag("profile-name-display");name.setContentDescription("เปลี่ยนชื่อโปรไฟล์ "+Profiles.activeName());name.setMaxLines(2);name.setEllipsize(android.text.TextUtils.TruncateAt.END);pad(name,10,10,0,10);holder.addView(name,new FrameLayout.LayoutParams(-1,-2,Gravity.CENTER_VERTICAL));name.setOnClickListener(v->editInlineProfileName(holder,on));selection.addView(holder,new LinearLayout.LayoutParams(0,dp(48),1));
         TextView choose=label("▾",22,on,true);choose.setTag("profile-selector");choose.setContentDescription("เลือกโปรไฟล์");choose.setGravity(Gravity.CENTER);choose.setOnClickListener(v->{if(saveInlineProfileName(true))showProfiles();});selection.addView(choose,new LinearLayout.LayoutParams(dp(44),dp(48)));bar.addView(selection,new LinearLayout.LayoutParams(0,-2,1));
         TextView manage=label("จัดการ",13,on,true);manage.setTag("manage-profiles");manage.setContentDescription("จัดการโปรไฟล์");manage.setGravity(Gravity.CENTER);manage.setBackground(AppTheme.background(AppTheme.blend(accent,on,.20f),dp(10)));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(66),dp(48));lp.leftMargin=dp(8);bar.addView(manage,lp);manage.setOnClickListener(v->{if(saveInlineProfileName(true))manageProfile();});header.addView(bar);

@@ -19,8 +19,10 @@ final class Store {
         }
         if (p.getBoolean("originOn", false) && !JobParser.areaMatches(job.origin(), p.getString("origins", ""))) reasons.add("ต้นทางไม่ตรง");
         if (p.getBoolean("destOn", false) && !JobParser.areaMatches(job.destination(), p.getString("destinations", ""))) reasons.add("ปลายทางไม่ตรง");
+        int service=job.category().equals("ขนส่งสินค้า")?1:job.category().equals("รับ-ส่งผู้โดยสาร")?2:0;
+        boolean serviceMismatch=service==0||(p.getInt("serviceMask",1)&service)==0;
         int type = p.getInt("type", 0);
-        if (type == 1 && !job.type().equals("ขนส่งทันที") || type == 2 && !job.type().equals("งานล่วงหน้า")) reasons.add("ประเภทงานไม่ตรง");
+        if (serviceMismatch || type == 1 && !job.type().equals("ขนส่งทันที") || type == 2 && !job.type().equals("งานล่วงหน้า")) reasons.add("ประเภทงานไม่ตรง");
         if (p.getBoolean("bulk", false)) for (int amount : new int[]{475,600,650,900,735,1000,1150})
             if (job.fare().compareTo(BigDecimal.valueOf(amount)) == 0) reasons.add("คาดว่าเป็นงานเหมา");
         return reasons.isEmpty()?null:String.join(" / ",reasons);
