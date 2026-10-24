@@ -40,3 +40,7 @@ body{background:#faf9f6}::selection{background:#ffd8bf;color:#272b24}
  .mobile-dock a.dock-link[aria-current=page]{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 3px 10px #e94a1920}
  .mobile-dock a.dock-link:active{transform:scale(.98)}
 }
+
+/* Portrait tutorial stays readable on phones and quiet until the viewer presses play. */
+.tutorial{max-width:1080px;margin:0 auto;padding:72px 32px;display:grid;grid-template-columns:1fr minmax(260px,360px);gap:72px;align-items:center;scroll-margin-top:100px}.tutorial-copy h2{font-size:clamp(29px,3.5vw,43px);line-height:1.4;letter-spacing:-1px;margin:16px 0}.tutorial-copy>p:not(.eyebrow){max-width:410px;color:var(--muted,#70776c);line-height:1.9}.tutorial-credit{display:block;margin:24px 0 12px;color:#797468;font-size:13px}.tutorial-player{width:100%;aspect-ratio:9/16;border-radius:24px;overflow:hidden;background:#17121e;box-shadow:0 18px 50px #39291818;border:1px solid #e7e2d8}.tutorial-player iframe{display:block;width:100%;height:100%;border:0}
+@media(max-width:700px){.tutorial{grid-template-columns:1fr;gap:26px;padding:44px 24px}.tutorial-copy h2{font-size:30px}.tutorial-copy>p:not(.eyebrow){font-size:14px}.tutorial-player{max-width:360px;justify-self:center;border-radius:20px}.tutorial-credit{margin-top:16px}}
