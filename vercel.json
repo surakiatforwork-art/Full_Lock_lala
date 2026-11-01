@@ -5,16 +5,30 @@
   "outputDirectory": "dist",
   "headers": [
     {
-      "source": "/web/downloads/FullLock.apk",
+      "source": "/web/downloads/:file(.*\\.apk)",
       "headers": [
-        {"key": "Content-Type", "value": "application/vnd.android.package-archive"},
-        {"key": "Content-Disposition", "value": "attachment; filename=FullLock.apk"},
-        {"key": "Cache-Control", "value": "public, max-age=0, must-revalidate"}
+        {
+          "key": "Content-Type",
+          "value": "application/vnd.android.package-archive"
+        },
+        {
+          "key": "Content-Disposition",
+          "value": "attachment"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
       ]
     },
     {
       "source": "/web/downloads/version.json",
-      "headers": [{"key": "Cache-Control", "value": "no-cache"}]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
     }
   ]
 }
