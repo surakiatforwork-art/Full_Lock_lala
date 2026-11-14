@@ -13,4 +13,6 @@ await rm(output,{recursive:true,force:true});await mkdir(output);
 for(const name of ['index.html','profile.html','download.html','.nojekyll'])await copyFile(join(root,name),join(output,name));
 await cp(join(root,'web'),join(output,'web'),{recursive:true,dereference:false,filter:async source=>{if((await lstat(source)).isSymbolicLink())throw Error('Public assets must not contain symlinks');return true;}});
 await mkdir(join(output,'tools'));await copyFile(join(root,'tools/flp-web-codec.mjs'),join(output,'tools/flp-web-codec.mjs'));
+await mkdir(join(output,'admin'));
+await copyFile(join(root,'control-center/frontend/index.html'),join(output,'admin/index.html'));
 console.log('Public site ready in dist/ — HTML, web assets, APK and profile codec only.');

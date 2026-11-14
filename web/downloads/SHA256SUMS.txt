@@ -1,2 +1,2 @@
-b5ae3fde283fea7e2f9766d3366d3a2d1282d344d8e499981b1bfeea8ae0e982  FullLock.apk
-b5ae3fde283fea7e2f9766d3366d3a2d1282d344d8e499981b1bfeea8ae0e982  FullLock-v0.1.47.apk
+a5d0a26d601e223efec2a218f215ea2dc14cf6781ba74c07eb7d068caba842ab  FullLock-v0.1.48.apk
+a5d0a26d601e223efec2a218f215ea2dc14cf6781ba74c07eb7d068caba842ab  FullLock.apk
