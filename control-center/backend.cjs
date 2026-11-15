@@ -59,6 +59,8 @@ const access = endpoint(async (req, body) => {
   const db = database();
   const device = db.collection('devices').doc(body.deviceId);
   const now = Date.now();
+  const mode = ['normal', 'root_connected', 'root_waiting'].includes(body.mode) ? body.mode : null;
+  const version = clean(body.version, 30);
   const decision = await db.runTransaction(async tx => {
     const [policy, current] = await Promise.all([tx.get(db.doc('control/settings')), tx.get(device)]);
     if (body.type === 'checkin' && !current.exists) throw new RequestError(401, 'กรุณาลงทะเบียนใหม่');
@@ -73,9 +75,10 @@ const access = endpoint(async (req, body) => {
       const count = prior.get('hour') === hour ? prior.get('count') : 0;
       if (count >= 30) throw new RequestError(429, 'กรุณาลองใหม่ภายหลัง');
       tx.set(limit, { hour, count: count + 1, expiresAt: new Date(now + 7200000) });
-      tx.create(device, { enabled: true, firstSeen: now, lastSeen: now, model: clean(body.model, 100), version: clean(body.version, 30) });
-    } else if (now - (current.get('lastSeen') || 0) >= 600000 || current.get('version') !== clean(body.version, 30)) {
-      tx.update(device, { lastSeen: now, model: clean(body.model, 100), version: clean(body.version, 30) });
+      tx.create(device, { enabled: true, firstSeen: now, lastSeen: now, model: clean(body.model, 100), version, mode });
+    } else if (now - (current.get('lastSeen') || 0) >= 600000 || current.get('version') !== version
+        || (current.get('mode') ?? null) !== mode) {
+      tx.update(device, { lastSeen: now, model: clean(body.model, 100), version, mode });
     }
     return { enabled, allowed };
   });

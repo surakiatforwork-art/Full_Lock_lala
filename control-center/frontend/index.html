@@ -92,6 +92,15 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, 
       sub.className = 'muted tiny';
       sub.textContent = [d.model, d.version && 'Full Lock ' + d.version, d.notes].filter(Boolean).join(' · ');
       details.append(sub);
+      const mode = document.createElement('div');
+      mode.className = 'muted tiny';
+      const modeLabels = new Map([
+        ['normal', 'ปกติ'],
+        ['root_connected', 'รูท · พบสัญญาณ Driver'],
+        ['root_waiting', 'รูท · ยังไม่พบสัญญาณ Driver']
+      ]);
+      mode.textContent = 'โหมดล่าสุด · ' + (modeLabels.get(d.mode) ?? 'ยังไม่มีข้อมูล');
+      details.append(mode);
       cell(row, d.deviceId, 'hash');
       cell(row, d.enabled ? 'อนุญาต' : 'ระงับ', d.enabled ? 'pill good' : 'pill bad');
       cell(row, d.lastSeen ? new Date(d.lastSeen).toLocaleString('th-TH') : '—');
