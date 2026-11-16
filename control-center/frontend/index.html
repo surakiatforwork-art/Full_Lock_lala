@@ -21,6 +21,11 @@ table{border-collapse:collapse;width:100%}th{text-align:left;font-size:12px;colo
 #editform label{margin:0}#editform button{align-self:end}#editform input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}
 #settingsline{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 #tablewrap{overflow-x:auto}@media(max-width:800px){.grid{grid-template-columns:1fr}#editform{grid-template-columns:1fr}header{padding:15px 20px}td,th{padding:8px} .brand{font-size:20px}}
+.filters{display:grid;grid-template-columns:minmax(210px,2fr) repeat(3,minmax(120px,1fr));gap:10px;margin:10px 0}
+.filters label{margin:0 0 4px}.filters select{font:inherit;width:100%;min-height:46px;padding:8px;background:#0e141c;color:var(--text);border:1px solid var(--border);border-radius:9px;outline-color:var(--accent)}
+.filter-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0}
+@media(max-width:800px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.filters>div:first-child{grid-column:1/-1}}
+@media(max-width:400px){.filters{grid-template-columns:1fr}}
 </style></head>
 <body><header><div><div class="brand"><strong>FULL LOCK</strong> CONTROL CENTER</div><div class="sub">จัดการสิทธิ์อุปกรณ์</div></div><button id="signout" hidden>ออกจากระบบ</button></header>
 <main><section class="card" id="authpanel"><h2>เข้าสู่ระบบผู้ดูแล</h2>
@@ -38,7 +43,12 @@ table{border-collapse:collapse;width:100%}th{text-align:left;font-size:12px;colo
 <div><label>หมายเหตุ</label><input id="notes" maxlength="500" placeholder="หมายเหตุ (ถ้ามี)"></div>
 <div><label class="switch"><input id="deviceEnabled" type="checkbox" checked>อนุญาต</label><button class="primary" type="submit">บันทึก</button></div>
 </form></section>
-<section class="card"><div class="row" style="justify-content:space-between"><h2>รายการเครื่อง</h2><button id="reload">รีเฟรช</button></div><input id="filter" placeholder="ค้นหาเครื่อง / hash / หมายเหตุ"><div id="tablewrap"><table><thead><tr><th>เครื่อง</th><th>Device Hash</th><th>สถานะ</th><th>เชื่อมต่อล่าสุด</th><th>จัดการ</th></tr></thead><tbody id="devices"></tbody></table></div></section>
+<section class="card"><div class="row" style="justify-content:space-between"><h2>รายการเครื่อง</h2><button id="reload">รีเฟรช</button></div><div class="filters">
+<div><label for="filter">ค้นหาอุปกรณ์</label><input id="filter" type="search" placeholder="ชื่อเครื่อง / รหัส / หมายเหตุ"></div>
+<div><label for="filterModel">รุ่นอุปกรณ์</label><select id="filterModel"><option value="">ทุกรุ่น</option></select></div>
+<div><label for="filterStatus">สิทธิ์รายเครื่อง</label><select id="filterStatus"><option value="">ทุกสถานะ</option><option value="allowed">อนุญาต</option><option value="blocked">ระงับ</option></select></div>
+<div><label for="filterMode">โหมดล่าสุด</label><select id="filterMode"><option value="">ทุกโหมด</option><option value="normal">ปกติ</option><option value="root">รูททั้งหมด</option><option value="root_connected">รูท · พบสัญญาณ Driver</option><option value="root_waiting">รูท · ยังไม่พบสัญญาณ Driver</option><option value="unknown">ยังไม่มีข้อมูล</option></select></div>
+</div><div class="filter-summary"><span id="filterSummary" class="muted tiny" role="status"></span><button id="resetFilters">ล้างตัวกรอง</button></div><div id="tablewrap"><table><thead><tr><th>เครื่อง</th><th>Device Hash</th><th>สถานะ</th><th>เชื่อมต่อล่าสุด</th><th>จัดการ</th></tr></thead><tbody id="devices"></tbody></table></div></section>
 <section class="card"><h2>ประวัติการเปลี่ยนแปลง</h2><div id="audit" class="muted tiny">—</div></section>
 </div></main>
 <script type="module">
@@ -48,6 +58,11 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, 
   'use strict';
   const $ = id => document.getElementById(id);
   let auth, state, busy = false;
+  const modeLabels = new Map([
+    ['normal', 'ปกติ'],
+    ['root_connected', 'รูท · พบสัญญาณ Driver'],
+    ['root_waiting', 'รูท · ยังไม่พบสัญญาณ Driver']
+  ]);
   async function rpc(action, payload = {}) {
     const response = await fetch('/api/admin', {
       method: 'POST',
@@ -81,11 +96,25 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, 
     $('count').textContent = (state.counts.total - state.counts.blocked) + ' / ' + state.counts.total;
     $('online').textContent = state.counts.active;
     $('onlineDetail').textContent = 'เครื่องที่ติดต่อระบบ · ระงับ ' + state.counts.blocked + ' เครื่อง';
-    const query = $('filter').value.toLowerCase();
+    const query = $('filter').value.trim().toLowerCase();
+    const model = $('filterModel').value;
+    const status = $('filterStatus').value;
+    const selectedMode = $('filterMode').value;
+    const models = new Set(state.devices.map(device => device.model).filter(Boolean));
+    if (model) models.add(model);
+    $('filterModel').replaceChildren(new Option('ทุกรุ่น', ''),
+      ...[...models].sort((a, b) => a.localeCompare(b, 'th', { numeric: true })).map(name => new Option(name, name)));
+    $('filterModel').value = model;
     const rows = $('devices');
     rows.replaceChildren();
+    let visible = 0;
     for (const d of state.devices) {
       if (![d.label, d.model, d.version && 'Full Lock ' + d.version, d.notes, d.deviceId].join(' ').toLowerCase().includes(query)) continue;
+      const deviceMode = modeLabels.has(d.mode) ? d.mode : 'unknown';
+      if (model && d.model !== model) continue;
+      if (status && status !== (d.enabled ? 'allowed' : 'blocked')) continue;
+      if (selectedMode === 'root' ? !deviceMode.startsWith('root_') : selectedMode && selectedMode !== deviceMode) continue;
+      visible++;
       const row = document.createElement('tr');
       const details = cell(row, d.label);
       const sub = document.createElement('div');
@@ -94,11 +123,6 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, 
       details.append(sub);
       const mode = document.createElement('div');
       mode.className = 'muted tiny';
-      const modeLabels = new Map([
-        ['normal', 'ปกติ'],
-        ['root_connected', 'รูท · พบสัญญาณ Driver'],
-        ['root_waiting', 'รูท · ยังไม่พบสัญญาณ Driver']
-      ]);
       mode.textContent = 'โหมดล่าสุด · ' + (modeLabels.get(d.mode) ?? 'ยังไม่มีข้อมูล');
       details.append(mode);
       cell(row, d.deviceId, 'hash');
@@ -116,6 +140,12 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, 
         () => change('setDeviceEnabled', { deviceId: d.deviceId, enabled: !d.enabled }), d.enabled ? 'danger' : ''));
       rows.append(row);
     }
+    $('filterSummary').textContent = 'พบ ' + visible.toLocaleString('th-TH')
+      + ' จาก ' + state.devices.length.toLocaleString('th-TH') + ' เครื่องในรายการ';
+    if (!visible) {
+      const empty = cell(rows.insertRow(), 'ไม่พบอุปกรณ์ตามเงื่อนไข', 'muted');
+      empty.colSpan = 5;
+    }
     $('audit').replaceChildren(...state.audit.map(entry => {
       const row = document.createElement('div');
       row.textContent = [new Date(entry.time).toLocaleString('th-TH'), entry.actor, entry.action, entry.target, entry.enabled ? 'อนุญาต' : 'ระงับ'].join(' · ');
@@ -127,7 +157,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, 
     busy = true;
     const status = $('notice');
     status.textContent = action === 'getState' ? 'กำลังโหลด…' : 'กำลังบันทึก…';
-    const controls = document.querySelectorAll('#dashboard button,#dashboard input,#signout');
+    const controls = document.querySelectorAll('#dashboard button,#dashboard input,#dashboard select,#signout');
     controls.forEach(control => control.disabled = true);
     try {
       state = await rpc(action, payload);
@@ -164,8 +194,14 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, 
     if (confirm(enabled ? 'เปิดสิทธิ์ใช้งาน?' : 'ปิดสิทธิ์ใช้งานทุกเครื่อง?')) change('setGlobalEnabled', { enabled });
     else render();
   };
-  $('reload').onclick = () => change('getState');
+  $('reload').onclick = () => change('getState', { search: $('filter').value.trim().toLowerCase() });
   $('filter').oninput = render;
+  for (const id of ['filterModel', 'filterStatus', 'filterMode']) $(id).onchange = render;
+  $('resetFilters').onclick = () => {
+    for (const id of ['filter', 'filterModel', 'filterStatus', 'filterMode']) $(id).value = '';
+    render();
+    change('getState');
+  };
   $('editform').onsubmit = event => {
     event.preventDefault();
     change('upsertDevice', {
@@ -175,7 +211,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, 
   };
   $('signout').onclick = async () => { await signOut(auth); location.reload(); };
   $('filter').onchange = () => {
-    const search = $('filter').value.trim();
+    const search = $('filter').value.trim().toLowerCase();
     change('getState', { search });
   };
   $('login').disabled = true;

@@ -46,3 +46,7 @@ body{background:#faf9f6}::selection{background:#ffd8bf;color:#272b24}
 @media(max-width:700px){.tutorial{grid-template-columns:1fr;gap:26px;padding:44px 24px}.tutorial-copy h2{font-size:30px}.tutorial-copy>p:not(.eyebrow){font-size:14px}.tutorial-player{max-width:360px;justify-self:center;border-radius:20px}.tutorial-credit{margin-top:16px}}
 
 .support-developer .button{flex:0 0 auto;width:auto!important;min-height:34px;padding:7px 12px;font-size:12px;font-weight:500;border-radius:7px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);box-shadow:none}.support-developer .button:hover{background:#fff2e9;border-color:var(--accent);filter:none}
+
+.install-count{display:inline-flex;align-items:baseline;flex-wrap:wrap;gap:.45rem;padding:.45rem .8rem;margin:.75rem 0 .15rem;border:1px solid #f1662359;border-radius:10px;background:#f1662310;font-size:.875rem}
+.install-count[hidden]{display:none}
+.install-count strong{color:var(--orange,#bd4012);font-size:1.2rem;font-variant-numeric:tabular-nums}

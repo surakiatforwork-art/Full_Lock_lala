@@ -131,4 +131,19 @@ const admin = endpoint(async (req, body) => {
     audit: history.docs.map(row => row.data())
   }};
 });
-module.exports = { admin, access };
+async function installCount(req, res) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    return res.status(405).end();
+  }
+  try {
+    const result = await database().collection('devices').count().get();
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    return res.json({ registeredDevices: result.data().count });
+  } catch {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(503).json({ error: 'Count unavailable' });
+  }
+}
+module.exports = { admin, access, installCount };
