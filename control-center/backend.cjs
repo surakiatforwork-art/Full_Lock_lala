@@ -1,7 +1,7 @@
 const { cert, initializeApp, getApps } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
-const { createHmac, timingSafeEqual } = require('node:crypto');
+const { createHmac, timingSafeEqual, randomBytes } = require('node:crypto');
 
 const admins = new Set([
   'phantom.master1245@gmail.com',
@@ -27,6 +27,10 @@ function endpoint(handler) {
       return res.status(405).json({ ok: false });
     }
     try {
+      if (process.env.FULL_LOCK_DATA_BACKEND === 'migration') {
+        res.setHeader('Retry-After', '300');
+        throw new RequestError(503, 'กำลังย้ายระบบ กรุณาลองใหม่ภายหลัง');
+      }
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       if (!body || typeof body !== 'object' || Array.isArray(body) || JSON.stringify(body).length > 4096) {
         throw new RequestError(400, 'คำขอไม่ถูกต้อง');
@@ -45,6 +49,29 @@ function deviceToken(id) {
 }
 const bearer = req => /^Bearer ([^\s]+)$/.exec(req.headers.authorization || '')?.[1] || '';
 
+async function sheets(action, payload = {}, actor = '') {
+  const url = process.env.FULL_LOCK_SHEETS_URL;
+  const secret = process.env.FULL_LOCK_SHEETS_SECRET;
+  if (!secret || secret.length < 32 || !/^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_-]+\/exec$/.test(url || '')) {
+    throw new Error('Sheets bridge is not configured');
+  }
+  const body = JSON.stringify({ action, payload, actor });
+  const timestamp = Date.now();
+  const nonce = randomBytes(16).toString('hex');
+  const signature = createHmac('sha256', secret).update(timestamp + '.' + nonce + '.' + body).digest('hex');
+  const response = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ timestamp, nonce, body, signature }), signal: AbortSignal.timeout(18000)
+  });
+  const result = await response.json();
+  if (!response.ok || result?.ok !== true) throw new Error('Sheets unavailable');
+  if (Number.isInteger(result.status) && result.status >= 400) {
+    throw new RequestError(result.status, result.error || 'ดำเนินการไม่สำเร็จ');
+  }
+  return result;
+}
+const usesSheets = () => process.env.FULL_LOCK_DATA_BACKEND === 'sheets';
+
 const access = endpoint(async (req, body) => {
   if (!deviceId(body.deviceId) || !['register', 'checkin'].includes(body.type)) {
     throw new RequestError(400, 'คำขอไม่ถูกต้อง');
@@ -55,6 +82,15 @@ const access = endpoint(async (req, body) => {
     if (!deviceId(supplied) || !timingSafeEqual(Buffer.from(token), Buffer.from(supplied))) {
       throw new RequestError(401, 'ตรวจสิทธิ์ไม่สำเร็จ');
     }
+  }
+  if (usesSheets()) {
+    const result = await sheets('access', {
+      type: body.type, deviceId: body.deviceId, model: clean(body.model, 100),
+      version: clean(body.version, 30), mode: body.mode
+    });
+    if (typeof result.enabled !== 'boolean' || typeof result.allowed !== 'boolean') throw Error('Invalid decision');
+    return body.type === 'register' ? { enabled: result.enabled, allowed: result.allowed, token }
+      : { enabled: result.enabled, allowed: result.allowed };
   }
   const db = database();
   const device = db.collection('devices').doc(body.deviceId);
@@ -96,6 +132,14 @@ const admin = endpoint(async (req, body) => {
     throw new RequestError(403, 'บัญชีนี้ไม่มีสิทธิ์ผู้ดูแล');
   }
   const { action, payload = {} } = body;
+  if (usesSheets()) {
+    if (!['getState', 'setGlobalEnabled', 'setDeviceEnabled', 'upsertDevice'].includes(action)) {
+      throw new RequestError(400, 'คำขอไม่ถูกต้อง');
+    }
+    const result = await sheets(action, payload, identity.email.toLowerCase());
+    if (!result.state) throw Error('Invalid admin response');
+    return { state: result.state };
+  }
   const config = db.doc('control/settings');
   const logs = db.collection('audit');
   if (action !== 'getState') {
@@ -136,11 +180,19 @@ async function installCount(req, res) {
     res.setHeader('Allow', 'GET');
     return res.status(405).end();
   }
+  if (process.env.FULL_LOCK_DATA_BACKEND === 'migration') {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Retry-After', '300');
+    return res.status(503).json({ error: 'Migration in progress' });
+  }
   try {
-    const result = await database().collection('devices').count().get();
+    const registeredDevices = usesSheets()
+      ? (await sheets('count')).registeredDevices
+      : (await database().collection('devices').count().get()).data().count;
+    if (!Number.isSafeInteger(registeredDevices) || registeredDevices < 0) throw Error('Invalid count');
     res.setHeader('Cache-Control', 'public, max-age=60');
     res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=86400');
-    return res.json({ registeredDevices: result.data().count });
+    return res.json({ registeredDevices });
   } catch {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(503).json({ error: 'Count unavailable' });
