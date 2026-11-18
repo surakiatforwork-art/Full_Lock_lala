@@ -139,7 +139,7 @@ async function installCount(req, res) {
   try {
     const result = await database().collection('devices').count().get();
     res.setHeader('Cache-Control', 'public, max-age=60');
-    res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=86400');
     return res.json({ registeredDevices: result.data().count });
   } catch {
     res.setHeader('Cache-Control', 'no-store');
